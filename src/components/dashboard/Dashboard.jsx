@@ -1,5 +1,5 @@
 // components/dashboard/Dashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { DASHBOARD_TABS, dashboardAPI, usersAPI } from '../utilis';
 import { Alert, LoadingSpinner } from '../common';
 import Overview from './Overview';
@@ -7,6 +7,7 @@ import EmployeeManagement from './EmployeeManagement';
 import ActivityMonitor from './ActivityMonitor';
 import Header from './Header';
 import Navigation from './Navigation';
+
 const Dashboard = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState(DASHBOARD_TABS.OVERVIEW);
   const [stats, setStats] = useState(null);
@@ -16,14 +17,10 @@ const Dashboard = ({ user, onLogout }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    loadDashboardData();
-  }, [activeTab]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setLoading(true);
     setError('');
-    
+
     try {
       if (activeTab === DASHBOARD_TABS.OVERVIEW) {
         const [statsRes, labRes] = await Promise.all([
@@ -48,7 +45,11 @@ const Dashboard = ({ user, onLogout }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    loadDashboardData();
+  }, [activeTab, loadDashboardData]);
 
   const handleEmployeesUpdate = () => {
     loadDashboardData();
