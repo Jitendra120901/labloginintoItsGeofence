@@ -27,7 +27,6 @@ const Login = ({ onLogin }) => {
     setError('');
 
     try {
-      // Get current location for login
       const location = await getLocation();
       
       const response = await authAPI.login({
