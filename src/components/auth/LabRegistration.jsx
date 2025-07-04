@@ -1,17 +1,17 @@
-// components/auth/LabRegistration.jsx
+// components/auth/LabRegistration.jsx - Enhanced with GPS accuracy handling
 import React, { useState } from 'react';
 import { 
     EnvironmentOutlined as MapPin,
     SafetyOutlined as Shield,
     TeamOutlined as Users,
     EyeOutlined as Eye,
-    EyeInvisibleOutlined as EyeOff
+    EyeInvisibleOutlined as EyeOff,
+    InfoCircleOutlined as Info
   } from '@ant-design/icons';
   
 import { useLocation } from '../hooks';
 import { authAPI, formatCoordinates } from '../utilis';
 import { Alert, LoadingSpinner } from '../common';
-
 
 const LabRegistration = ({ onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -24,11 +24,14 @@ const LabRegistration = ({ onSuccess }) => {
     adminEmail: '',
     adminPassword: '',
     latitude: '',
-    longitude: ''
+    longitude: '',
+    geofenceRadius: '100' // Default to 100m instead of 20m
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [locationStatus, setLocationStatus] = useState('');
+  const [gpsAccuracy, setGpsAccuracy] = useState(null);
   
   const { getLocation, isGettingLocation, locationError } = useLocation();
 
@@ -41,16 +44,30 @@ const LabRegistration = ({ onSuccess }) => {
 
   const handleGetLocation = async () => {
     try {
+      setLocationStatus('Getting your location...');
       const location = await getLocation();
       const formatted = formatCoordinates(location.latitude, location.longitude);
+      
       setFormData({
         ...formData,
         latitude: formatted.latitude,
         longitude: formatted.longitude
       });
+      
+      setGpsAccuracy(location.accuracy);
+      
+      if (location.accuracy <= 15) {
+        setLocationStatus(`Location acquired with excellent accuracy (${Math.round(location.accuracy)}m)`);
+      } else if (location.accuracy <= 30) {
+        setLocationStatus(`Location acquired with good accuracy (${Math.round(location.accuracy)}m)`);
+      } else {
+        setLocationStatus(`Location acquired but accuracy is poor (${Math.round(location.accuracy)}m) - Consider moving to an open area`);
+      }
+      
       setError('');
     } catch (err) {
       setError(locationError || 'Unable to get location');
+      setLocationStatus('');
     }
   };
 
@@ -60,13 +77,33 @@ const LabRegistration = ({ onSuccess }) => {
     setError('');
 
     try {
-      await authAPI.registerLab(formData);
+      // Include geofence radius in the submission
+      const submitData = {
+        ...formData,
+        geofenceRadius: parseInt(formData.geofenceRadius)
+      };
+      
+      await authAPI.registerLab(submitData);
       onSuccess();
     } catch (err) {
       setError(err.message);
     } finally {
       setLoading(false);
     }
+  };
+
+  const getGPSAccuracyColor = () => {
+    if (!gpsAccuracy) return 'text-gray-600';
+    if (gpsAccuracy <= 15) return 'text-green-600';
+    if (gpsAccuracy <= 30) return 'text-yellow-600';
+    return 'text-red-600';
+  };
+
+  const getRecommendedRadius = () => {
+    if (!gpsAccuracy) return 100;
+    // Recommend radius based on GPS accuracy + buffer
+    const baseRadius = Math.max(50, Math.ceil(gpsAccuracy * 2));
+    return Math.min(baseRadius, 200); // Cap at 200m
   };
 
   if (loading) {
@@ -214,9 +251,25 @@ const LabRegistration = ({ onSuccess }) => {
         <div className="bg-gray-50 p-6 rounded-lg">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
             <MapPin className="mr-2" size={20} />
-            Geofence Location (20m radius)
+            Geofence Location & Settings
           </h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          
+          {/* GPS Accuracy Info */}
+          {gpsAccuracy && (
+            <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
+              <div className="flex items-center">
+                <Info className="mr-2 text-blue-600" size={16} />
+                <span className="text-sm text-blue-800">
+                  GPS Accuracy: <span className={getGPSAccuracyColor()}>{Math.round(gpsAccuracy)}m</span>
+                </span>
+              </div>
+              <p className="text-xs text-blue-700 mt-1">
+                Recommended geofence radius: {getRecommendedRadius()}m (based on GPS accuracy + buffer)
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Latitude *</label>
               <input
@@ -243,7 +296,24 @@ const LabRegistration = ({ onSuccess }) => {
                 placeholder="-74.006000"
               />
             </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Geofence Radius (meters) *</label>
+              <select
+                name="geofenceRadius"
+                value={formData.geofenceRadius}
+                onChange={handleChange}
+                required
+                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="50">50m - Small office</option>
+                <option value="100">100m - Medium building</option>
+                <option value="150">150m - Large building</option>
+                <option value="200">200m - Campus area</option>
+                <option value="300">300m - Large campus</option>
+              </select>
+            </div>
           </div>
+          
           <div className="mt-4">
             <button
               type="button"
@@ -254,9 +324,23 @@ const LabRegistration = ({ onSuccess }) => {
               <MapPin className="mr-2" size={16} />
               {isGettingLocation ? 'Getting Location...' : 'Use Current Location'}
             </button>
-            <p className="text-sm text-gray-600 mt-2">
-              A 20-meter geofence will be created around this location for employee authentication.
-            </p>
+            
+            {locationStatus && (
+              <div className="mt-2 text-sm text-gray-700">
+                <span className="font-medium">Status:</span> {locationStatus}
+              </div>
+            )}
+          </div>
+          
+          <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+            <h4 className="text-sm font-medium text-yellow-800 mb-2">Geofence Guidelines:</h4>
+            <ul className="text-xs text-yellow-700 space-y-1">
+              <li>• Choose radius based on your lab's physical size</li>
+              <li>• Account for GPS accuracy (typically 5-30m in urban areas)</li>
+              <li>• Consider parking areas and building entrances</li>
+              <li>• Test with employees before finalizing</li>
+              <li>• You can adjust this later from admin settings</li>
+            </ul>
           </div>
         </div>
 

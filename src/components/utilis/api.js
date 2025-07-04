@@ -1,4 +1,4 @@
-// utils/api.js
+// utils/api.js - Updated to handle geofence radius
 import { API_BASE_URL, STORAGE_KEYS } from './constants';
 
 export const apiCall = async (endpoint, options = {}) => {
@@ -27,7 +27,10 @@ export const apiCall = async (endpoint, options = {}) => {
 export const authAPI = {
   registerLab: (labData) => apiCall('/auth/register-lab', {
     method: 'POST',
-    body: JSON.stringify(labData)
+    body: JSON.stringify({
+      ...labData,
+      geofenceRadius: parseInt(labData.geofenceRadius) || 100
+    })
   }),
   
   login: (credentials) => apiCall('/auth/login', {
@@ -35,7 +38,14 @@ export const authAPI = {
     body: JSON.stringify(credentials)
   }),
   
-  getProfile: () => apiCall('/auth/profile')
+  getProfile: () => apiCall('/auth/profile'),
+  
+  updateGeofence: (radius) => apiCall('/auth/lab/update-geofence', {
+    method: 'PUT',
+    body: JSON.stringify({ radius: parseInt(radius) })
+  }),
+  
+  getLabSettings: () => apiCall('/auth/lab/settings')
 };
 
 // Users API calls
@@ -66,4 +76,12 @@ export const usersAPI = {
 export const dashboardAPI = {
   getStats: () => apiCall('/dashboard/stats'),
   getLabInfo: () => apiCall('/dashboard/lab-info')
+};
+
+// Location debugging API
+export const locationAPI = {
+  debugDistance: (latitude, longitude) => apiCall('/auth/debug-distance', {
+    method: 'POST',
+    body: JSON.stringify({ latitude: parseFloat(latitude), longitude: parseFloat(longitude) })
+  })
 };
