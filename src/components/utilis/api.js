@@ -85,3 +85,30 @@ export const locationAPI = {
     body: JSON.stringify({ latitude: parseFloat(latitude), longitude: parseFloat(longitude) })
   })
 };
+
+export const  verifyUserLocation = async (locationData) => {
+  try {
+    const response = await fetch('/api/auth/verify-location', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${localStorage.getItem('token')}`
+      },
+      body: JSON.stringify({
+        latitude: locationData.latitude,
+        longitude: locationData.longitude,
+        userId: locationData.userId
+      })
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Location verification failed');
+    }
+
+    return await response.json();
+  } catch (error) {
+    console.error('Location verification error:', error);
+    throw error;
+  }
+};
