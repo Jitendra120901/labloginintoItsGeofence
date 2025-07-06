@@ -165,7 +165,7 @@ const ActivityMonitor = ({ loginAttempts, employees, labLocation }) => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <h2 className="text-xl font-semibold">Login Activity</h2>
+        <h2 className="text-xl font-semibold">Login Activity test</h2>
         <button
           onClick={() => setShowMap(!showMap)}
           className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
