@@ -89,9 +89,9 @@ const Dashboard = ({ user, onLogout }) => {
       }
       
       // Check if location has changed significantly
-      const locationChanged = !areLocationsSimilar(lastLocation, currentLocation, 15);
+      // const locationChanged = !areLocationsSimilar(lastLocation, currentLocation, 15);
       
-      if (locationChanged) {
+      if (1==1) {
         console.log('Location changed detected, verifying with backend...');
         
         // Location has changed, verify with backend
@@ -132,7 +132,7 @@ const Dashboard = ({ user, onLogout }) => {
     // Set up interval for periodic checks (every 3 minutes)
     intervalRef.current = setInterval(() => {
       performLocationCheck();
-    }, 3 * 60 * 1000); // 3 minutes in milliseconds
+    }, 1 * 60 * 1000); // 3 minutes in milliseconds
     
     // Cleanup interval on unmount
     return () => {

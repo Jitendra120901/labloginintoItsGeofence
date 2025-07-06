@@ -45,7 +45,33 @@ export const authAPI = {
     body: JSON.stringify({ radius: parseInt(radius) })
   }),
   
-  getLabSettings: () => apiCall('/auth/lab/settings')
+  getLabSettings: () => apiCall('/auth/lab/settings'),
+  verifyUserLocation: async (locationData) => {
+    try {
+      const response = await fetch('/api/auth/verify-location', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          latitude: locationData.latitude,
+          longitude: locationData.longitude,
+          userId: locationData.userId
+        })
+      });
+  
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Location verification failed');
+      }
+  
+      return await response.json();
+    } catch (error) {
+      console.error('Location verification error:', error);
+      throw error;
+    }
+  }
 };
 
 // Users API calls
@@ -69,7 +95,9 @@ export const usersAPI = {
   getLoginAttempts: (params = {}) => {
     const queryString = new URLSearchParams(params).toString();
     return apiCall(`/users/login-attempts${queryString ? `?${queryString}` : ''}`);
-  }
+  },
+
+ 
 };
 
 // Dashboard API calls
@@ -86,29 +114,3 @@ export const locationAPI = {
   })
 };
 
-export const  verifyUserLocation = async (locationData) => {
-  try {
-    const response = await fetch('/api/auth/verify-location', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${localStorage.getItem('token')}`
-      },
-      body: JSON.stringify({
-        latitude: locationData.latitude,
-        longitude: locationData.longitude,
-        userId: locationData.userId
-      })
-    });
-
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Location verification failed');
-    }
-
-    return await response.json();
-  } catch (error) {
-    console.error('Location verification error:', error);
-    throw error;
-  }
-};
