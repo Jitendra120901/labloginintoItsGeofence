@@ -1,4 +1,4 @@
-// components/auth/Login.jsx - Enhanced with GPS accuracy handling
+// components/auth/Login.jsx - Simplified with basic lat/lng only
 import React, { useState } from 'react';
 import { useLocation } from '../hooks';
 import { authAPI } from '../utilis';
@@ -12,7 +12,6 @@ const Login = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [locationStatus, setLocationStatus] = useState('');
-  const [gpsAccuracy, setGpsAccuracy] = useState(null);
   
   const { getLocation, isGettingLocation } = useLocation();
 
@@ -32,21 +31,13 @@ const Login = ({ onLogin }) => {
     try {
       const location = await getLocation();
       
-      // Show GPS accuracy info
-      setGpsAccuracy(location.accuracy);
-      if (location.accuracy > 30) {
-        setLocationStatus(`GPS accuracy: ${Math.round(location.accuracy)}m - May cause location issues`);
-      } else {
-        setLocationStatus(`GPS accuracy: ${Math.round(location.accuracy)}m - Good signal`);
-      }
-
-      // Attempt login
-      setLocationStatus('Attempting login...');
+      setLocationStatus('Verifying location...');
+      
+      // Simple login with just lat/lng
       const response = await authAPI.login({
         ...formData,
         latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy // Send GPS accuracy to backend
+        longitude: location.longitude
       });
 
       setLocationStatus('Login successful!');
@@ -65,20 +56,6 @@ const Login = ({ onLogin }) => {
     } finally {
       setLoading(false);
     }
-  };
-
-  const getGPSAccuracyColor = () => {
-    if (!gpsAccuracy) return 'text-gray-600';
-    if (gpsAccuracy <= 15) return 'text-green-600';
-    if (gpsAccuracy <= 30) return 'text-yellow-600';
-    return 'text-red-600';
-  };
-
-  const getGPSAccuracyMessage = () => {
-    if (!gpsAccuracy) return '';
-    if (gpsAccuracy <= 15) return 'Excellent GPS signal';
-    if (gpsAccuracy <= 30) return 'Good GPS signal';
-    return 'Poor GPS signal - move to open area';
   };
 
   return (
@@ -117,7 +94,7 @@ const Login = ({ onLogin }) => {
           />
         </div>
 
-        {/* GPS Status Display */}
+        {/* Simple Location Status */}
         {(isGettingLocation || locationStatus) && (
           <div className="bg-blue-50 border border-blue-200 rounded-md p-3">
             <div className="flex items-center">
@@ -128,13 +105,8 @@ const Login = ({ onLogin }) => {
               </div>
               <div className="ml-3">
                 <p className="text-sm text-blue-800">
-                  {isGettingLocation ? 'Getting your location for geofence verification...' : locationStatus}
+                  {isGettingLocation ? 'Getting your location...' : locationStatus}
                 </p>
-                {gpsAccuracy && (
-                  <p className={`text-xs mt-1 ${getGPSAccuracyColor()}`}>
-                    GPS Accuracy: {Math.round(gpsAccuracy)}m - {getGPSAccuracyMessage()}
-                  </p>
-                )}
               </div>
             </div>
           </div>
@@ -149,19 +121,11 @@ const Login = ({ onLogin }) => {
         </button>
       </form>
 
-      {/* Enhanced info section */}
+      {/* Simple info section */}
       <div className="mt-6 text-center">
-        <p className="text-sm text-gray-600 mb-2">
+        <p className="text-sm text-gray-600">
           Note: Lab employees can only login from within the lab premises
         </p>
-        <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-          <p>💡 Tips for better GPS accuracy:</p>
-          <ul className="text-left mt-1 space-y-1">
-            <li>• Move to an open area</li>
-            <li>• Enable high accuracy GPS</li>
-            <li>• Wait for better signal if accuracy is poor</li>
-          </ul>
-        </div>
       </div>
     </div>
   );
