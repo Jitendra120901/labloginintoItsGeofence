@@ -97,8 +97,6 @@ const Dashboard = ({ user, onLogout }) => {
   
   const { getLocation } = useLocation();
 
- 
-
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
     const R = 6371000; // Earth's radius in meters
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -113,7 +111,7 @@ const Dashboard = ({ user, onLogout }) => {
   };
 
   // Optimized verifyLocationWithBackend function with distance pre-check
-  const verifyLocationWithBackend = async (currentLocation) => {
+  const verifyLocationWithBackend = useCallback(async (currentLocation) => {
     console.log("Verifying location with backend:", currentLocation);
     console.log("User ID:", user.id);
     
@@ -182,10 +180,10 @@ const Dashboard = ({ user, onLogout }) => {
       console.log("API error occurred, maintaining current geofence status");
       return true; // Don't change the dashboard state on API errors
     }
-  };
+  }, [user.id, lastLocation, isWithinGeofence]);
 
   // Updated performLocationCheck function
-  const performLocationCheck = async () => {
+  const performLocationCheck = useCallback(async () => {
     console.log("=== Starting location check ===");
     console.log("isLocationChecking:", isLocationChecking);
     
@@ -223,7 +221,7 @@ const Dashboard = ({ user, onLogout }) => {
       console.log("=== Location check completed ===");
       setIsLocationChecking(false);
     }
-  };
+  }, [isLocationChecking, getLocation, verifyLocationWithBackend]);
 
   // Set up periodic location checking
   useEffect(() => {
@@ -256,13 +254,13 @@ const Dashboard = ({ user, onLogout }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, []);
+  }, [getLocation, verifyLocationWithBackend, performLocationCheck]);
 
   // Manual location check function
-  const handleManualLocationCheck = () => {
+  const handleManualLocationCheck = useCallback(() => {
     console.log("Manual location check triggered");
     performLocationCheck();
-  };
+  }, [performLocationCheck]);
 
   const loadDashboardData = useCallback(async () => {
     setLoading(true);
@@ -301,9 +299,9 @@ const Dashboard = ({ user, onLogout }) => {
     }
   }, [activeTab, loadDashboardData, isWithinGeofence]);
 
-  const handleEmployeesUpdate = () => {
+  const handleEmployeesUpdate = useCallback(() => {
     loadDashboardData();
-  };
+  }, [loadDashboardData]);
 
   const renderContent = () => {
     if (loading) {
