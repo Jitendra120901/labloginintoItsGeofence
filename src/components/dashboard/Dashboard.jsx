@@ -97,23 +97,7 @@ const Dashboard = ({ user, onLogout }) => {
   
   const { getLocation } = useLocation();
 
-  // Function to compare two locations with a small tolerance
-  const areLocationsSimilar = (loc1, loc2, toleranceInMeters = 10) => {
-    if (!loc1 || !loc2) return false;
-    
-    // Simple distance calculation for quick comparison
-    const latDiff = Math.abs(loc1.latitude - loc2.latitude);
-    const lngDiff = Math.abs(loc1.longitude - loc2.longitude);
-    
-    // Rough conversion: 1 degree ≈ 111,000 meters
-    // For small distances, this approximation is sufficient
-    const distanceInMeters = Math.sqrt(
-      Math.pow(latDiff * 111000, 2) + 
-      Math.pow(lngDiff * 111000 * Math.cos(loc1.latitude * Math.PI / 180), 2)
-    );
-    
-    return distanceInMeters <= toleranceInMeters;
-  };
+ 
 
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
     const R = 6371000; // Earth's radius in meters
