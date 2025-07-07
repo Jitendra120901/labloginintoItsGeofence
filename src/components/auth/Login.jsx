@@ -41,7 +41,9 @@ const Login = ({ onLogin }) => {
       });
 
       setLocationStatus('Login successful!');
-      onLogin(response.user, response.token);
+      
+      
+      onLogin(response.user, response.token,response.useCurrentLocation);
       
     } catch (err) {
       setError(err.message);

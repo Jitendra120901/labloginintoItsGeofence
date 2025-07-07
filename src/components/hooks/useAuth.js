@@ -23,9 +23,12 @@ export const useAuth = () => {
     setIsLoading(false);
   }, []);
 
-  const login = (userData, token) => {
+  const login = (userData, token,locationData) => {
     localStorage.setItem(STORAGE_KEYS.TOKEN, token);
     localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(userData));
+    localStorage.setItem(STORAGE_KEYS.LOCATION, JSON.stringify(locationData));
+    console.log("locationData data set in localStorage:", locationData);
+    
     setUser(userData);
   };
 

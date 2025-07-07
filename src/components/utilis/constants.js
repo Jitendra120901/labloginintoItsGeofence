@@ -16,7 +16,9 @@ export const GEOFENCE_RADIUS = 20; // meters
 
 export const STORAGE_KEYS = {
   TOKEN: 'token',
-  USER: 'user'
+  USER: 'user',
+  LOCATION: 'location',
+  
 };
 
 export const PAGES = {

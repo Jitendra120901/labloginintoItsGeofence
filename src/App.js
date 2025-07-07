@@ -19,8 +19,8 @@ const App = () => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const handleLogin = (userData, token) => {
-    login(userData, token);
+  const handleLogin = (userData, token,locationdata) => {
+    login(userData, token,locationdata);
   };
 
   const handleLogout = () => {

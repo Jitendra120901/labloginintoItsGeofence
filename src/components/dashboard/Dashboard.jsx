@@ -1,6 +1,6 @@
 // components/dashboard/Dashboard.jsx
 import React, { useState, useEffect, useCallback, useRef } from 'react';
-import { DASHBOARD_TABS, dashboardAPI, usersAPI, authAPI } from '../utilis';
+import { DASHBOARD_TABS, dashboardAPI, usersAPI, authAPI, STORAGE_KEYS } from '../utilis';
 import { useLocation } from '../hooks';
 import { Alert, LoadingSpinner } from '../common';
 import Overview from './Overview';
@@ -88,11 +88,12 @@ const Dashboard = ({ user, onLogout }) => {
   const [error, setError] = useState('');
   
   // Location verification states
-  const [lastLocation, setLastLocation] = useState(null);
+  const [loginLocation, setLoginLocation] = useState(null); // User's login location (reference point)
   const [locationCheckError, setLocationCheckError] = useState('');
   const [isLocationChecking, setIsLocationChecking] = useState(false);
   const [isWithinGeofence, setIsWithinGeofence] = useState(true); // New state for geofence
   const [locationData, setLocationData] = useState(null); // Store location response data
+  const [initialLocationCaptured, setInitialLocationCaptured] = useState(false); // Prevent multiple initial calls
   const intervalRef = useRef(null);
   
   const { getLocation } = useLocation();
@@ -110,42 +111,48 @@ const Dashboard = ({ user, onLogout }) => {
     return distance;
   };
 
-  // Optimized verifyLocationWithBackend function with distance pre-check
-  const verifyLocationWithBackend = useCallback(async (currentLocation) => {
-    console.log("Verifying location with backend:", currentLocation);
-    console.log("User ID:", user.id);
+  // Optimized verifyLocationWithBackend function with distance pre-check using localStorage
+  const verifyLocationWithBackend = useCallback(async (currentLocation, isInitialLogin = false) => {
     
-    // Check if we have a previous location to compare with
-    if (lastLocation) {
-      console.log("Previous location found, calculating distance...");
-      console.log("Previous location:", lastLocation);
+    // Always get the stored location from localStorage
+    let storedLocation = null;
+    try {
+      const location = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATION));
+      storedLocation = location;
+      console.log("Stored location from localStorage:", storedLocation);
+    } catch (error) {
+      console.error("Error reading stored location:", error);
+    }
+    
+    // Check if we have a stored location to compare with (skip for initial login)
+    if (storedLocation && !isInitialLogin) {
+      console.log("Stored location:", storedLocation);
       console.log("Current location:", currentLocation);
       
-      // Calculate distance between previous and current location
-      const distanceMoved = calculateDistance(
-        lastLocation.latitude,
-        lastLocation.longitude,
+      // Calculate distance between stored location and current location
+      const distanceFromStored = calculateDistance(
+        storedLocation.latitude,
+        storedLocation.longitude,
         currentLocation.latitude,
         currentLocation.longitude
       );
       
-      console.log(`Distance moved: ${distanceMoved.toFixed(2)} meters`);
+      console.log(`Distance from stored location: ${distanceFromStored.toFixed(2)} meters`);
       
-      // If distance is less than 15 meters, skip API call
-      if (distanceMoved < 15) {
-        console.log("Distance is less than 15 meters - skipping API call");
+      // If distance is less than 15 meters from stored location, skip API call
+      if (distanceFromStored < 15) {
+        console.log("Distance is less than 15 meters from stored location - skipping API call");
         console.log("Maintaining current geofence status");
-        
-        // DON'T update lastLocation here - keep it as the last verified location
-        // This ensures we always measure distance from the last API-verified location
         
         // Return current geofence status without API call
         return isWithinGeofence;
       }
       
-      console.log("Distance is >= 15 meters - proceeding with API call");
+      console.log("Distance is >= 15 meters from stored location - proceeding with API call");
+    } else if (!isInitialLogin && !storedLocation) {
+      console.log("No stored location found - this shouldn't happen after initial login");
     } else {
-      console.log("No previous location found - this is first check, proceeding with API call");
+      console.log("Initial login - proceeding with API call to establish stored location");
     }
     
     try {
@@ -170,27 +177,51 @@ const Dashboard = ({ user, onLogout }) => {
       console.log("User is within geofence - verification successful");
       setIsWithinGeofence(true);
       
-      // Only update lastLocation when we successfully verify with backend
-      setLastLocation(currentLocation);
+      // Set login location and store in localStorage on initial successful verification
+      if (isInitialLogin) {
+        console.log("Setting login location as reference point:", currentLocation);
+        setLoginLocation(currentLocation);
+        
+        // Store login location in localStorage for persistence
+        try {
+          localStorage.setItem(STORAGE_KEYS.LOCATION, JSON.stringify(currentLocation));
+          console.log("Login location stored in localStorage:", currentLocation);
+        } catch (error) {
+          console.error("Error storing login location:", error);
+        }
+      } else {
+        // For subsequent successful verifications, update the stored location
+        try {
+          localStorage.setItem(STORAGE_KEYS.LOCATION, JSON.stringify(currentLocation));
+          console.log("Updated stored location in localStorage:", currentLocation);
+        } catch (error) {
+          console.error("Error updating stored location:", error);
+        }
+      }
       
       return true;
     } catch (error) {
-      console.error('Location verification failed:', error);
-      console.error('Error details:', error.message);
-      console.error('Error stack:', error.stack);
-      
-      // On network/API error, assume user is still in valid state (don't show 404)
-      // Just log the error but continue showing normal dashboard
-      console.log("API error occurred, maintaining current geofence status");
-      return true; // Don't change the dashboard state on API errors
+      console.error("Location verification API error:", error);
+      // On error, maintain current status to avoid disrupting user
+      return true; 
     }
-  }, [user.id, lastLocation, isWithinGeofence]);
+  }, [user.id, isWithinGeofence]);
+
+  // Initialize stored location on component mount
+  useEffect(() => {
+    try {
+      const location = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATION));
+      if (location) {
+        console.log("Loaded stored location from localStorage:", location);
+        setLoginLocation(location);
+      }
+    } catch (error) {
+      console.error("Error loading stored location:", error);
+    }
+  }, []);
 
   // Updated performLocationCheck function
   const performLocationCheck = useCallback(async () => {
-    console.log("=== Starting location check ===");
-    console.log("isLocationChecking:", isLocationChecking);
-    
     if (isLocationChecking) {
       console.log("Location check already in progress, skipping...");
       return;
@@ -200,18 +231,14 @@ const Dashboard = ({ user, onLogout }) => {
     setLocationCheckError('');
     
     try {
-      console.log("Getting current location...");
       const currentLocation = await getLocation();
       console.log("Current location obtained:", currentLocation);
-     
-      // Always verify with backend (but backend verification will check distance internally)
-      console.log("Verifying with backend...");
-      const isStillValid = await verifyLocationWithBackend(currentLocation);
+      
+      const isStillValid = await verifyLocationWithBackend(currentLocation, false);
       console.log("Backend verification result:", isStillValid);
       
       if (isStillValid) {
-        // lastLocation is now only updated inside verifyLocationWithBackend when API call is made
-        console.log('Location verified - user within geofence or minimal movement from last verified location');
+        console.log('Location verified - user within geofence or close to stored location');
       } else {
         console.log('Location verification failed - user outside geofence');
       }
@@ -228,28 +255,57 @@ const Dashboard = ({ user, onLogout }) => {
 
   // Set up periodic location checking
   useEffect(() => {
-    // Initial location capture
+    // Check if we have a stored location
+    let storedLocation = null;
+    try {
+      storedLocation = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATION));
+    } catch (error) {
+      console.error("Error reading stored location:", error);
+    }
+
+    // If we already have a stored location, just start periodic checks
+    if (storedLocation && !intervalRef.current) {
+      console.log("Stored location already available, starting periodic checks...");
+      intervalRef.current = setInterval(() => {
+        performLocationCheck();
+      }, 1 * 60 * 1000); // 1 minute for testing
+      return;
+    }
+
+    // Prevent multiple initial location captures
+    if (initialLocationCaptured) {
+      return;
+    }
+
+    // Initial location capture (only if no stored location)
     const captureInitialLocation = async () => {
       try {
+        console.log('Capturing initial login location...');
         const initialLocation = await getLocation();
         console.log('Initial location captured:', initialLocation);
         
-        // Perform initial verification (this will always call API since lastLocation is null)
-        await verifyLocationWithBackend(initialLocation);
+        // Perform initial verification and set as stored location
+        await verifyLocationWithBackend(initialLocation, true);
+        setInitialLocationCaptured(true);
+        
+        // Set up interval for periodic checks only after initial capture
+        intervalRef.current = setInterval(() => {
+          performLocationCheck();
+        }, 1 * 60 * 1000); // 1 minute for testing
+        
       } catch (error) {
         console.error('Failed to capture initial location:', error);
         // Don't set error message that shows to user
         // Just log and continue with normal dashboard
         console.log("Initial location capture failed, continuing with normal dashboard");
+        setInitialLocationCaptured(true); // Prevent retries
       }
     };
     
-    captureInitialLocation();
-    
-    // Set up interval for periodic checks (every 1 minute for testing, change back to 3 minutes)
-    intervalRef.current = setInterval(() => {
-      performLocationCheck();
-    }, 1 * 60 * 1000); // 1 minute for testing
+    // Only capture initial location if no stored location exists
+    if (!storedLocation) {
+      captureInitialLocation();
+    }
     
     // Cleanup interval on unmount
     return () => {
@@ -257,7 +313,7 @@ const Dashboard = ({ user, onLogout }) => {
         clearInterval(intervalRef.current);
       }
     };
-  }, [getLocation, verifyLocationWithBackend, performLocationCheck]);
+  }, [getLocation, verifyLocationWithBackend, performLocationCheck, initialLocationCaptured]);
 
   // Manual location check function
   const handleManualLocationCheck = useCallback(() => {
@@ -392,9 +448,9 @@ const Dashboard = ({ user, onLogout }) => {
         {/* Development/Testing Info - Remove in production */}
         {process.env.NODE_ENV === 'development' && (
           <div className="mt-4 text-center space-y-2">
-            {lastLocation && (
+            {loginLocation && (
               <div className="mt-2 text-xs text-gray-500">
-                Last Location: {lastLocation.latitude.toFixed(6)}, {lastLocation.longitude.toFixed(6)}
+                Stored Location: {loginLocation.latitude.toFixed(6)}, {loginLocation.longitude.toFixed(6)}
                 {locationData && (
                   <span className="ml-2">
                     (Distance from center: {locationData.distance}m)
