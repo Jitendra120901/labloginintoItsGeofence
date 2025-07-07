@@ -162,25 +162,11 @@ const Dashboard = ({ user, onLogout }) => {
     
     try {
       console.log("Making API call to authAPI.verifyUserLocation...");
-      
-      // TEMPORARY TEST: Mock the API response to test 404 page
-      // Comment this out after testing and uncomment the real API call below
-      const response = {
-        success: true,
-        isWithinGeofence: false,
-        distance: 74,
-        radius: 50,
-        message: "User is outside lab premises"
-      };
-      
-      // Real API call (currently commented for testing)
-      /*
       const response = await authAPI.verifyUserLocation({
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
         userId: user.id
       });
-      */
       
       console.log("Backend response received:", response);
       console.log("Response type:", typeof response);
