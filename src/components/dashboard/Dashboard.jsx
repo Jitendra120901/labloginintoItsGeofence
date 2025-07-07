@@ -479,8 +479,7 @@ const Dashboard = ({ user, onLogout }) => {
         </Alert>
       )}
 
-      {/* Location Success Info (Optional - for debugging) */}
-      {locationData && locationData.isWithinGeofence && process.env.NODE_ENV === 'development' && (
+      
         <div className="bg-green-50 border-l-4 border-green-400 p-4 mx-4 mt-4">
           <div className="flex">
             <div className="flex-shrink-0">
@@ -495,15 +494,14 @@ const Dashboard = ({ user, onLogout }) => {
             </div>
           </div>
         </div>
-      )}
+      
 
       {/* Main Content */}
       <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         {error && <Alert type="error" onClose={() => setError('')}>{error}</Alert>}
         {renderContent()}
         
-        {/* Development/Testing Info - Remove in production */}
-        {process.env.NODE_ENV === 'development' && (
+    
           <div className="mt-4 text-center space-y-2">
             {loginLocation && (
               <div className="mt-2 text-xs text-gray-500">
@@ -522,7 +520,7 @@ const Dashboard = ({ user, onLogout }) => {
               </div>
             )}
           </div>
-        )}
+       
       </main>
 
       {/* Footer */}
