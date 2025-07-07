@@ -48,18 +48,9 @@ export const authAPI = {
   getLabSettings: () => apiCall('/auth/lab/settings'),
   verifyUserLocation: async (locationData) => {
     try {
-      const response = await fetch('/api/auth/verify-location', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          latitude: locationData.latitude,
-          longitude: locationData.longitude,
-          userId: locationData.userId
-        })
-      });
+      const response = await apiCall('/auth/verify-location', { method: 'POST',
+        body: JSON.stringify(locationData)});
+  console.log("response", response.data);
   
       if (!response.ok) {
         const errorData = await response.json();
@@ -114,3 +105,10 @@ export const locationAPI = {
   })
 };
 
+
+export const formatCoordinates = (latitude, longitude) => {
+  return {
+    latitude: parseFloat(latitude).toFixed(6),
+    longitude: parseFloat(longitude).toFixed(6)
+  };
+};
