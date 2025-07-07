@@ -98,6 +98,11 @@ const Dashboard = ({ user, onLogout }) => {
   
   const { getLocation } = useLocation();
 
+  // Debug: Log state changes
+  useEffect(() => {
+    console.log("🔄 isWithinGeofence state changed to:", isWithinGeofence);
+  }, [isWithinGeofence]);
+
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
     const R = 6371000; // Earth's radius in meters
     const dLat = (lat2 - lat1) * Math.PI / 180;
@@ -157,25 +162,66 @@ const Dashboard = ({ user, onLogout }) => {
     
     try {
       console.log("Making API call to authAPI.verifyUserLocation...");
+      
+      // TEMPORARY TEST: Mock the API response to test 404 page
+      // Comment this out after testing and uncomment the real API call below
+      const response = {
+        success: true,
+        isWithinGeofence: false,
+        distance: 74,
+        radius: 50,
+        message: "User is outside lab premises"
+      };
+      
+      // Real API call (currently commented for testing)
+      /*
       const response = await authAPI.verifyUserLocation({
         latitude: currentLocation.latitude,
         longitude: currentLocation.longitude,
         userId: user.id
       });
+      */
       
       console.log("Backend response received:", response);
+      console.log("Response type:", typeof response);
+      console.log("Response keys:", Object.keys(response || {}));
       
       // Store the location data for display
       setLocationData(response);
       
+      // Check if response has the expected structure
+      if (!response || typeof response.isWithinGeofence === 'undefined') {
+        console.error("Invalid response structure:", response);
+        // Don't change geofence status on invalid response
+        return isWithinGeofence;
+      }
+      
       if (!response.isWithinGeofence) {
-        console.log("User is outside geofence - showing Lab 404 page");
-        setIsWithinGeofence(false);
+        console.log("🚨 User is outside geofence - showing Lab 404 page");
+        console.log("Response:", response);
+        console.log("About to call setIsWithinGeofence(false)...");
+        
+        // Use functional state update to ensure it's not overridden
+        setIsWithinGeofence((prevState) => {
+          console.log("setIsWithinGeofence functional update - prevState:", prevState);
+          console.log("Setting to false");
+          return false;
+        });
+        
+        console.log("setIsWithinGeofence(false) called");
         return false;
       }
       
-      console.log("User is within geofence - verification successful");
-      setIsWithinGeofence(true);
+      console.log("✅ User is within geofence - verification successful");
+      console.log("About to call setIsWithinGeofence(true)...");
+      
+      setIsWithinGeofence((prevState) => {
+        console.log("setIsWithinGeofence functional update - prevState:", prevState);
+        console.log("Setting to true");
+        return true;
+      });
+      
+      console.log("setIsWithinGeofence(true) called");
       
       // Set login location and store in localStorage on initial successful verification
       if (isInitialLogin) {
@@ -202,8 +248,21 @@ const Dashboard = ({ user, onLogout }) => {
       return true;
     } catch (error) {
       console.error("Location verification API error:", error);
-      // On error, maintain current status to avoid disrupting user
-      return true; 
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // IMPORTANT: Don't just return true on error - this could mask real geofence violations
+      // Instead, maintain current status for network errors, but handle API errors properly
+      if (error.message.includes('response.json is not a function')) {
+        console.error("API response parsing error - check your API implementation");
+      }
+      
+      // For now, return current status to avoid disrupting user, but this should be improved
+      console.log("Maintaining current geofence status due to API error");
+      return isWithinGeofence; 
     }
   }, [user.id, isWithinGeofence]);
 
@@ -236,11 +295,13 @@ const Dashboard = ({ user, onLogout }) => {
       
       const isStillValid = await verifyLocationWithBackend(currentLocation, false);
       console.log("Backend verification result:", isStillValid);
+      console.log("Current isWithinGeofence state:", isWithinGeofence);
       
       if (isStillValid) {
-        console.log('Location verified - user within geofence or close to stored location');
+        console.log('✅ Location verified - user within geofence or close to stored location');
       } else {
-        console.log('Location verification failed - user outside geofence');
+        console.log('🚨 Location verification failed - user outside geofence');
+        console.log('This should trigger Lab 404 page on next render');
       }
       
     } catch (error) {
@@ -253,7 +314,7 @@ const Dashboard = ({ user, onLogout }) => {
     }
   }, [isLocationChecking, getLocation, verifyLocationWithBackend]);
 
-  // Set up periodic location checking
+  // Set up initial location capture and periodic checking
   useEffect(() => {
     // Check if we have a stored location
     let storedLocation = null;
@@ -261,15 +322,6 @@ const Dashboard = ({ user, onLogout }) => {
       storedLocation = JSON.parse(localStorage.getItem(STORAGE_KEYS.LOCATION));
     } catch (error) {
       console.error("Error reading stored location:", error);
-    }
-
-    // If we already have a stored location, just start periodic checks
-    if (storedLocation && !intervalRef.current) {
-      console.log("Stored location already available, starting periodic checks...");
-      intervalRef.current = setInterval(() => {
-        performLocationCheck();
-      }, 1 * 60 * 1000); // 1 minute for testing
-      return;
     }
 
     // Prevent multiple initial location captures
@@ -288,15 +340,8 @@ const Dashboard = ({ user, onLogout }) => {
         await verifyLocationWithBackend(initialLocation, true);
         setInitialLocationCaptured(true);
         
-        // Set up interval for periodic checks only after initial capture
-        intervalRef.current = setInterval(() => {
-          performLocationCheck();
-        }, 1 * 60 * 1000); // 1 minute for testing
-        
       } catch (error) {
         console.error('Failed to capture initial location:', error);
-        // Don't set error message that shows to user
-        // Just log and continue with normal dashboard
         console.log("Initial location capture failed, continuing with normal dashboard");
         setInitialLocationCaptured(true); // Prevent retries
       }
@@ -305,15 +350,32 @@ const Dashboard = ({ user, onLogout }) => {
     // Only capture initial location if no stored location exists
     if (!storedLocation) {
       captureInitialLocation();
+    } else {
+      // If stored location exists, mark as captured to prevent initial capture
+      setInitialLocationCaptured(true);
+    }
+  }, [getLocation, verifyLocationWithBackend]);
+
+  // Separate effect for setting up the interval - runs only once
+  useEffect(() => {
+    // Only set up interval if not already running
+    if (!intervalRef.current) {
+      console.log("Setting up periodic location checks (1 minute interval)...");
+      intervalRef.current = setInterval(() => {
+        console.log("=== Periodic location check triggered ===");
+        performLocationCheck();
+      }, 1 * 60 * 1000); // 1 minute for testing
     }
     
     // Cleanup interval on unmount
     return () => {
       if (intervalRef.current) {
+        console.log("Cleaning up location check interval");
         clearInterval(intervalRef.current);
+        intervalRef.current = null;
       }
     };
-  }, [getLocation, verifyLocationWithBackend, performLocationCheck, initialLocationCaptured]);
+  }, []); // Empty dependency array ensures this runs only once
 
   // Manual location check function
   const handleManualLocationCheck = useCallback(() => {
@@ -386,7 +448,14 @@ const Dashboard = ({ user, onLogout }) => {
   };
 
   // If user is outside geofence, show Lab 404 page
+  console.log("=== RENDER CHECK ===");
+  console.log("Current isWithinGeofence:", isWithinGeofence);
+  console.log("Type of isWithinGeofence:", typeof isWithinGeofence);
+  console.log("isWithinGeofence === false:", isWithinGeofence === false);
+  console.log("!isWithinGeofence:", !isWithinGeofence);
+  
   if (!isWithinGeofence) {
+    console.log("🚨 RENDERING LAB 404 PAGE - isWithinGeofence:", isWithinGeofence);
     return (
       <LabNotFoundPage 
         labInfo={labInfo}
@@ -395,6 +464,8 @@ const Dashboard = ({ user, onLogout }) => {
       />
     );
   }
+
+  console.log("✅ RENDERING NORMAL DASHBOARD - isWithinGeofence:", isWithinGeofence);
 
   return (
     <div className="min-h-screen bg-gray-100">

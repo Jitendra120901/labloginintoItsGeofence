@@ -48,16 +48,13 @@ export const authAPI = {
   getLabSettings: () => apiCall('/auth/lab/settings'),
   verifyUserLocation: async (locationData) => {
     try {
-      const response = await apiCall('/auth/verify-location', { method: 'POST',
-        body: JSON.stringify(locationData)});
-  console.log("response", response.data);
-  
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Location verification failed');
-      }
-  
-      return await response.json();
+      const data = await apiCall('/auth/verify-location', { 
+        method: 'POST',
+        body: JSON.stringify(locationData)
+      });
+      
+      console.log("response", data);
+      return data; // apiCall already returns parsed JSON - don't call .json() again
     } catch (error) {
       console.error('Location verification error:', error);
       throw error;
