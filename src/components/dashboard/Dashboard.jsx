@@ -136,8 +136,8 @@ const Dashboard = ({ user, onLogout }) => {
         console.log("Distance is less than 15 meters - skipping API call");
         console.log("Maintaining current geofence status");
         
-        // Update last location for next comparison
-        setLastLocation(currentLocation);
+        // DON'T update lastLocation here - keep it as the last verified location
+        // This ensures we always measure distance from the last API-verified location
         
         // Return current geofence status without API call
         return isWithinGeofence;
@@ -169,6 +169,10 @@ const Dashboard = ({ user, onLogout }) => {
       
       console.log("User is within geofence - verification successful");
       setIsWithinGeofence(true);
+      
+      // Only update lastLocation when we successfully verify with backend
+      setLastLocation(currentLocation);
+      
       return true;
     } catch (error) {
       console.error('Location verification failed:', error);
@@ -206,9 +210,8 @@ const Dashboard = ({ user, onLogout }) => {
       console.log("Backend verification result:", isStillValid);
       
       if (isStillValid) {
-        // Update last known location only after successful verification or distance check
-        setLastLocation(currentLocation);
-        console.log('Location verified - user within geofence or minimal movement');
+        // lastLocation is now only updated inside verifyLocationWithBackend when API call is made
+        console.log('Location verified - user within geofence or minimal movement from last verified location');
       } else {
         console.log('Location verification failed - user outside geofence');
       }
