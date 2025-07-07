@@ -115,7 +115,6 @@ const Dashboard = ({ user, onLogout }) => {
     return distanceInMeters <= toleranceInMeters;
   };
 
-  // Function to calculate distance between two coordinates in meters
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
     const R = 6371000; // Earth's radius in meters
     const dLat = (lat2 - lat1) * Math.PI / 180;
