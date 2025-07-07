@@ -22,15 +22,7 @@ const LabNotFoundPage = ({ labInfo, onRetryLocation, isChecking }) => {
             </svg>
           </div>
           
-          {/* Error Code */}
-          <h1 className="text-6xl font-bold text-gray-900 mb-2">404</h1>
-          
-          {/* Main Message */}
-          <h2 className="text-2xl font-semibold text-gray-800 mb-4">
-            Lab Not Found
-          </h2>
-          
-          {/* Description */}
+        
           <p className="text-gray-600 mb-6">
             You are currently outside the lab premises. Please return to{' '}
             <span className="font-semibold text-blue-600">
@@ -101,6 +93,10 @@ const Dashboard = ({ user, onLogout }) => {
   // Debug: Log state changes
   useEffect(() => {
     console.log("🔄 isWithinGeofence state changed to:", isWithinGeofence);
+    // Clear location errors when user comes back within geofence
+    if (isWithinGeofence) {
+      setLocationCheckError('');
+    }
   }, [isWithinGeofence]);
 
   const calculateDistance = (lat1, lng1, lat2, lng2) => {
@@ -147,13 +143,20 @@ const Dashboard = ({ user, onLogout }) => {
       // If distance is less than 15 meters from stored location, skip API call
       if (distanceFromStored < 15) {
         console.log("Distance is less than 15 meters from stored location - skipping API call");
-        console.log("Maintaining current geofence status");
         
-        // Return current geofence status without API call
-        return isWithinGeofence;
+        // IMPORTANT: If user is currently outside geofence but close to stored location,
+        // we should still make an API call to check if they're back inside
+        if (!isWithinGeofence) {
+          console.log("User is currently outside geofence but close to stored location - making API call to verify");
+          // Don't skip API call, let it proceed to verify if they're back inside
+        } else {
+          console.log("Maintaining current geofence status (inside)");
+          // Return current geofence status without API call only if currently inside
+          return isWithinGeofence;
+        }
+      } else {
+        console.log("Distance is >= 15 meters from stored location - proceeding with API call");
       }
-      
-      console.log("Distance is >= 15 meters from stored location - proceeding with API call");
     } else if (!isInitialLogin && !storedLocation) {
       console.log("No stored location found - this shouldn't happen after initial login");
     } else {
@@ -273,7 +276,7 @@ const Dashboard = ({ user, onLogout }) => {
     }
     
     setIsLocationChecking(true);
-    setLocationCheckError('');
+    setLocationCheckError(''); // Clear any previous errors
     
     try {
       const currentLocation = await getLocation();
@@ -285,9 +288,13 @@ const Dashboard = ({ user, onLogout }) => {
       
       if (isStillValid) {
         console.log('✅ Location verified - user within geofence or close to stored location');
+        // Clear any location errors when verification is successful
+        setLocationCheckError('');
       } else {
         console.log('🚨 Location verification failed - user outside geofence');
         console.log('This should trigger Lab 404 page on next render');
+        // Clear any location errors since we're showing the 404 page instead
+        setLocationCheckError('');
       }
       
     } catch (error) {
@@ -366,6 +373,8 @@ const Dashboard = ({ user, onLogout }) => {
   // Manual location check function
   const handleManualLocationCheck = useCallback(() => {
     console.log("Manual location check triggered");
+    // Clear any existing errors when manually checking
+    setLocationCheckError('');
     performLocationCheck();
   }, [performLocationCheck]);
 
