@@ -2,7 +2,16 @@ import React, { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Smartphone, Shield, CheckCircle, AlertCircle, Fingerprint, Wifi, WifiOff, MapPin } from "lucide-react";
+import { 
+  MobileOutlined as Smartphone,
+  SafetyOutlined as Shield,
+  CheckCircleOutlined as CheckCircle,
+  ExclamationCircleOutlined as AlertCircle,
+  SafetyCertificateOutlined as Fingerprint,
+  WifiOutlined as Wifi,
+  DisconnectOutlined as WifiOff,
+  EnvironmentOutlined as MapPin
+} from '@ant-design/icons';
 
 type MobileAuthState = "ready" | "authenticating" | "location-capture" | "processing" | "success" | "error";
 
@@ -11,7 +20,7 @@ const MobileAuthWithLocation: React.FC = () => {
   const [sessionId, setSessionId] = useState<string>("");
   const [userEmail, setUserEmail] = useState<string>("");
   const [labName, setLabName] = useState<string>("");
-  const [mode, setMode] = useState<string>("login"); // 'login' or 'registration'
+  const [mode, setMode] = useState<string>("login");
   const [errorMessage, setErrorMessage] = useState<string>("");
   const [wsConnected, setWsConnected] = useState<boolean>(false);
   const [ws, setWs] = useState<WebSocket | null>(null);
@@ -31,7 +40,6 @@ const MobileAuthWithLocation: React.FC = () => {
         setWsConnected(true);
         setWs(websocket);
         
-        // Register mobile session
         if (sessionId) {
           websocket.send(JSON.stringify({
             type: 'register_mobile',
@@ -423,7 +431,7 @@ const MobileAuthWithLocation: React.FC = () => {
       <Card className="w-full max-w-sm shadow-lg">
         <CardHeader className="text-center">
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center mx-auto mb-4">
-            <StateIcon className="h-8 w-8 text-white" />
+            <StateIcon className="text-white text-2xl" />
           </div>
           
           <CardTitle className="text-xl">
@@ -438,12 +446,12 @@ const MobileAuthWithLocation: React.FC = () => {
           <div className="flex items-center justify-center mt-2">
             {wsConnected ? (
               <Badge variant="outline" className="border-green-500 text-green-600">
-                <Wifi className="h-3 w-3 mr-1" />
+                <Wifi className="mr-1" />
                 Connected
               </Badge>
             ) : (
               <Badge variant="outline" className="border-red-500 text-red-600">
-                <WifiOff className="h-3 w-3 mr-1" />
+                <WifiOff className="mr-1" />
                 Disconnected
               </Badge>
             )}
@@ -470,7 +478,7 @@ const MobileAuthWithLocation: React.FC = () => {
                   className="w-full" 
                   onClick={authenticateWithPasskey}
                 >
-                  <Fingerprint className="h-4 w-4 mr-2" />
+                  <Fingerprint className="mr-2" />
                   {mode === 'registration' ? 'Authenticate' : 'Authenticate with Passkey'}
                 </Button>
 
@@ -491,7 +499,7 @@ const MobileAuthWithLocation: React.FC = () => {
               {requireLocation && (
                 <div className="bg-blue-50 p-3 rounded-lg">
                   <div className="flex items-center mb-2">
-                    <MapPin className="h-4 w-4 mr-2 text-blue-600" />
+                    <MapPin className="mr-2 text-blue-600" />
                     <span className="text-sm font-medium text-blue-800">Location Required</span>
                   </div>
                   <p className="text-xs text-blue-700">
@@ -539,7 +547,7 @@ const MobileAuthWithLocation: React.FC = () => {
           {authState === "success" && (
             <div className="text-center space-y-4">
               <div className="w-12 h-12 bg-green-500 rounded-full flex items-center justify-center mx-auto">
-                <CheckCircle className="h-6 w-6 text-white" />
+                <CheckCircle className="text-white text-xl" />
               </div>
               <div>
                 <h3 className="font-semibold text-green-600 mb-2">Complete!</h3>
@@ -574,7 +582,7 @@ const MobileAuthWithLocation: React.FC = () => {
           {authState === "error" && (
             <div className="text-center space-y-4">
               <div className="w-12 h-12 bg-red-500 rounded-full flex items-center justify-center mx-auto">
-                <AlertCircle className="h-6 w-6 text-white" />
+                <AlertCircle className="text-white text-xl" />
               </div>
               <div>
                 <h3 className="font-semibold text-red-600 mb-2">Error</h3>

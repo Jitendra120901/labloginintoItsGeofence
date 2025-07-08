@@ -1,6 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import { authAPI, formatCoordinates } from '../utilis';
-import { Alert, LoadingSpinner } from '../common';
 import { 
   EnvironmentOutlined as MapPin,
   SafetyOutlined as Shield,
@@ -15,9 +13,11 @@ import {
   WifiOutlined as Wifi,
   DisconnectOutlined as WifiOff
 } from '@ant-design/icons';
+import { authAPI, formatCoordinates } from '../utilis';
+import { Alert, LoadingSpinner } from '../common';
 
 const LabRegistration = ({ onSuccess }) => {
-  const [registrationMethod, setRegistrationMethod] = useState('traditional'); // 'traditional' or 'qr'
+  const [registrationMethod, setRegistrationMethod] = useState('traditional');
   const [formData, setFormData] = useState({
     name: '',
     address: '',
@@ -114,7 +114,6 @@ const LabRegistration = ({ onSuccess }) => {
       setWsConnected(true);
       setWs(websocket);
       
-      // Register desktop session for registration
       websocket.send(JSON.stringify({
         type: 'register_desktop',
         data: {
@@ -143,7 +142,6 @@ const LabRegistration = ({ onSuccess }) => {
           case 'passkey_verified':
           case 'passkey_created':
             setQrAuthState('processing');
-            // Request location from mobile
             websocket.send(JSON.stringify({
               type: 'request_location',
               data: { sessionId, authData: data.authData }
@@ -170,8 +168,6 @@ const LabRegistration = ({ onSuccess }) => {
       console.log('Registration WebSocket disconnected');
       setWsConnected(false);
       setWs(null);
-      
-      // Attempt reconnection
       setTimeout(connectWebSocket, 3000);
     };
     
@@ -219,7 +215,6 @@ const LabRegistration = ({ onSuccess }) => {
     setQrCodeUrl(qrUrl);
   };
 
-  // Start QR-based location capture
   const startQRLocationCapture = () => {
     if (!formData.adminEmail) {
       setError('Please enter admin email first');
@@ -232,7 +227,6 @@ const LabRegistration = ({ onSuccess }) => {
     connectWebSocket();
   };
 
-  // Switch back to traditional method
   const switchToTraditional = () => {
     setRegistrationMethod('traditional');
     setQrAuthState('scanning');
@@ -244,7 +238,6 @@ const LabRegistration = ({ onSuccess }) => {
     }
   };
 
-  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -326,7 +319,7 @@ const LabRegistration = ({ onSuccess }) => {
         {/* Lab Information */}
         <div className="bg-gray-50 p-6 rounded-lg">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <Shield className="mr-2" size={20} />
+            <Shield className="mr-2 text-lg" />
             Lab Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -396,7 +389,7 @@ const LabRegistration = ({ onSuccess }) => {
         {/* Admin Information */}
         <div className="bg-gray-50 p-6 rounded-lg">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <Users className="mr-2" size={20} />
+            <Users className="mr-2 text-lg" />
             Lab Administrator Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -442,7 +435,7 @@ const LabRegistration = ({ onSuccess }) => {
                   onClick={() => setShowPassword(!showPassword)}
                   className="absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
                 >
-                  {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                  {showPassword ? <EyeOff className="text-base" /> : <Eye className="text-base" />}
                 </button>
               </div>
             </div>
@@ -452,7 +445,7 @@ const LabRegistration = ({ onSuccess }) => {
         {/* Location Information */}
         <div className="bg-gray-50 p-6 rounded-lg">
           <h2 className="text-xl font-semibold mb-4 flex items-center">
-            <MapPin className="mr-2" size={20} />
+            <MapPin className="mr-2 text-lg" />
             Geofence Location & Settings
           </h2>
           
@@ -466,7 +459,7 @@ const LabRegistration = ({ onSuccess }) => {
                   : 'border-gray-300 hover:border-gray-400'
               }`}>
                 <div className="flex items-center mb-2">
-                  <MapPin className="mr-2 text-blue-600" size={20} />
+                  <MapPin className="mr-2 text-blue-600 text-lg" />
                   <span className="font-medium">Desktop Browser Location</span>
                 </div>
                 <p className="text-sm text-gray-600">
@@ -487,7 +480,7 @@ const LabRegistration = ({ onSuccess }) => {
                   : 'border-gray-300 hover:border-gray-400'
               }`}>
                 <div className="flex items-center mb-2">
-                  <QrCode className="mr-2 text-green-600" size={20} />
+                  <QrCode className="mr-2 text-green-600 text-lg" />
                   <span className="font-medium">Mobile QR Location</span>
                 </div>
                 <p className="text-sm text-gray-600">
@@ -512,12 +505,12 @@ const LabRegistration = ({ onSuccess }) => {
                 <div className="flex items-center justify-center mb-4">
                   {wsConnected ? (
                     <span className="inline-flex items-center text-green-600 text-sm">
-                      <Wifi className="h-4 w-4 mr-1" />
+                      <Wifi className="mr-1" />
                       Connected
                     </span>
                   ) : (
                     <span className="inline-flex items-center text-red-600 text-sm">
-                      <WifiOff className="h-4 w-4 mr-1" />
+                      <WifiOff className="mr-1" />
                       Disconnected
                     </span>
                   )}
@@ -532,7 +525,7 @@ const LabRegistration = ({ onSuccess }) => {
                     />
                   ) : (
                     <div className="text-center">
-                      <QRStateIcon className="h-16 w-16 text-gray-400 mx-auto mb-2" />
+                      <QRStateIcon className="text-6xl text-gray-400 mb-2" />
                       {(qrAuthState === 'authenticating' || qrAuthState === 'processing') && (
                         <div className="animate-spin w-8 h-8 border-2 border-blue-200 border-t-blue-600 rounded-full mx-auto mb-2"></div>
                       )}
@@ -599,7 +592,7 @@ const LabRegistration = ({ onSuccess }) => {
           {gpsAccuracy && (
             <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-md">
               <div className="flex items-center">
-                <Info className="mr-2 text-blue-600" size={16} />
+                <Info className="mr-2 text-blue-600 text-base" />
                 <span className="text-sm text-blue-800">
                   GPS Accuracy: <span className={getGPSAccuracyColor()}>{Math.round(gpsAccuracy)}m</span>
                   {registrationMethod === 'qr' && <span className="ml-2">(Mobile Device)</span>}
@@ -665,7 +658,7 @@ const LabRegistration = ({ onSuccess }) => {
                 disabled={loading}
                 className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
               >
-                <MapPin className="mr-2" size={16} />
+                <MapPin className="mr-2 text-base" />
                 {loading ? 'Getting Location...' : 'Use Current Browser Location'}
               </button>
               
