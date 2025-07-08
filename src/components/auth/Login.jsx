@@ -8,9 +8,7 @@ import {
   CheckCircleOutlined as CheckCircle,
   ExclamationCircleOutlined as AlertCircle,
   WifiOutlined as Wifi,
-  DisconnectOutlined as WifiOff,
-  EnvironmentOutlined as MapPin,
-  SafetyCertificateOutlined as FingerPrint
+  DisconnectOutlined as WifiOff
 } from '@ant-design/icons';
 
 const Login = ({ onLogin }) => {
@@ -152,6 +150,9 @@ const Login = ({ onLogin }) => {
             setError(data.message);
             setQrAuthState('error');
             break;
+          default:
+            console.log('Unknown WebSocket message type:', type);
+            break;
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
@@ -209,7 +210,7 @@ const Login = ({ onLogin }) => {
   };
 
   // Generate QR code for mobile authentication
-  const generateQRCode = () => {
+  const generateQRCode = React.useCallback(() => {
     if (!formData.email) {
       setError('Please enter your email first');
       return;
@@ -220,7 +221,7 @@ const Login = ({ onLogin }) => {
     
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileAuthUrl)}`;
     setQrCodeUrl(qrUrl);
-  };
+  }, [formData.email, sessionId]);
 
   // Initialize QR authentication
   const startQRAuth = () => {
@@ -250,7 +251,7 @@ const Login = ({ onLogin }) => {
     if (authMethod === 'qr' && qrAuthState === 'scanning') {
       generateQRCode();
     }
-  }, [authMethod, qrAuthState, formData.email]);
+  }, [authMethod, qrAuthState, generateQRCode]);
 
   const getQRStateIcon = () => {
     switch (qrAuthState) {

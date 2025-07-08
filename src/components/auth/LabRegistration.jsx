@@ -158,6 +158,9 @@ const LabRegistration = ({ onSuccess }) => {
             setError(data.message);
             setQrAuthState('error');
             break;
+          default:
+            console.log('Unknown WebSocket message type:', type);
+            break;
         }
       } catch (error) {
         console.error('Error parsing WebSocket message:', error);
@@ -202,7 +205,7 @@ const LabRegistration = ({ onSuccess }) => {
   };
 
   // Generate QR code for mobile location capture
-  const generateQRCode = () => {
+  const generateQRCode = React.useCallback(() => {
     if (!formData.adminEmail) {
       setError('Please enter admin email first');
       return;
@@ -213,7 +216,7 @@ const LabRegistration = ({ onSuccess }) => {
     
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileAuthUrl)}`;
     setQrCodeUrl(qrUrl);
-  };
+  }, [formData.adminEmail, formData.name, sessionId]);
 
   const startQRLocationCapture = () => {
     if (!formData.adminEmail) {
@@ -298,7 +301,7 @@ const LabRegistration = ({ onSuccess }) => {
     if (registrationMethod === 'qr' && qrAuthState === 'scanning') {
       generateQRCode();
     }
-  }, [registrationMethod, qrAuthState, formData.adminEmail, formData.name]);
+  }, [registrationMethod, qrAuthState, generateQRCode]);
 
   if (loading) {
     return <LoadingSpinner size="lg" text="Registering lab..." />;
