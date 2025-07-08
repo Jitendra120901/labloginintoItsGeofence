@@ -498,7 +498,7 @@ const Dashboard = ({ user, onLogout }) => {
             </div>
             <div className="ml-3">
               <p className="text-sm text-green-700">
-                Location verified - Distance: {locationData.distance}m (within {locationData.radius}m radius)
+                Location verified - Distance: {locationData?.distance}m (within {locationData?.radius}m radius)
               </p>
             </div>
           </div>
