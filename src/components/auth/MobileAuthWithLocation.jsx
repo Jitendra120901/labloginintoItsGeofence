@@ -54,196 +54,51 @@ const MobileAuthWithLocation: React.FC = () => {
         }
       };
       
-   
-
-websocket.onmessage = (event) => {
-  try {
-    const { type, data } = JSON.parse(event.data);
-    console.log('Mobile WebSocket message:', type, data);
-    
-    switch (type) {
-      case 'mobile_registered':
-        console.log('Mobile registered successfully');
-        break;
-        
-      case 'auth_success_confirmed':
-      case 'passkey_created_confirmed':
-        console.log('Authentication confirmed by server');
-        if (requireLocation) {
-          setAuthState("location-capture");
-          setTimeout(() => {
-            captureAndSendLocation();
-          }, 500);
-        } else {
-          setAuthState("success");
-        }
-        break;
-        
-      case 'request_location':
-        console.log('Desktop requesting location data');
-        // Immediately capture and send location when requested
-        if (authData) {
-          captureAndSendLocation();
-        } else {
-          console.error('No auth data available for location request');
-          setErrorMessage('Authentication data missing');
-          setAuthState("error");
-        }
-        break;
-        
-      case 'error':
-        console.error('WebSocket error:', data.message);
-        setErrorMessage(data.message);
-        setAuthState("error");
-        break;
-    }
-  } catch (error) {
-    console.error('Error parsing WebSocket message:', error);
-  }
-};
-
-// Updated authenticateWithPasskey function
-const authenticateWithPasskey = async (): Promise<void> => {
-  if (!isWebAuthnSupported()) {
-    setErrorMessage("WebAuthn/Passkey is not supported on this device");
-    setAuthState("error");
-    return;
-  }
-
-  setAuthState("authenticating");
-
-  try {
-    // Generate authentication challenge
-    const challenge = new Uint8Array(32);
-    crypto.getRandomValues(challenge);
-
-    // Create WebAuthn assertion request
-    const publicKeyCredentialRequestOptions: CredentialRequestOptions = {
-      publicKey: {
-        challenge: challenge,
-        timeout: 60000,
-        rpId: window.location.hostname,
-        userVerification: "required",
-        allowCredentials: []
-      }
-    };
-
-    // Request authentication
-    const credential = await navigator.credentials.get(publicKeyCredentialRequestOptions);
-
-    if (credential) {
-      console.log("Passkey authentication successful", credential);
-      
-      const authInfo = {
-        success: true,
-        credential: credential.id,
-        userEmail,
-        deviceInfo: {
-          userAgent: navigator.userAgent,
-          platform: navigator.platform,
-          timestamp: Date.now()
-        },
-        type: "authentication"
-      };
-      
-      setAuthData(authInfo);
-      
-      // Send authentication success via WebSocket
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'passkey_auth_success',
-          data: { 
-            sessionId,
-            authData: authInfo
-          },
-          message: "Passkey authentication successful. Checking location...",
-          authData: authInfo,
-          nextStep: "location_check"
-        }));
-      }
-      
-      // If location is required, capture it immediately after authentication
-      if (requireLocation) {
-        console.log('Location required, capturing automatically...');
-        setTimeout(() => {
-          captureAndSendLocation();
-        }, 500);
-      } else {
-        setAuthState("success");
-      }
-    }
-  } catch (error: any) {
-    console.error("Authentication failed:", error);
-    
-    let errorMsg = "Authentication failed";
-    if (error.name === "NotAllowedError") {
-      errorMsg = "Authentication was cancelled or timed out";
-    } else if (error.name === "InvalidStateError") {
-      errorMsg = "No passkey found for this device";
-    } else if (error.name === "NotSupportedError") {
-      errorMsg = "Passkey authentication not supported";
-    }
-    
-    setErrorMessage(errorMsg);
-    setAuthState("error");
-  }
-};
-
-// Updated captureAndSendLocation function - sends auth + location together
-const captureAndSendLocation = async () => {
-  try {
-    setAuthState("location-capture");
-    console.log('Starting location capture...');
-    
-    const location = await captureLocation();
-    console.log('Location captured:', location);
-    
-    setAuthState("processing");
-    
-    // Send BOTH authentication data AND location data together
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      const completeAuthMessage = {
-        type: 'passkey_auth_success',
-        data: {
-          sessionId,
-          authData: authData,
-          location: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            accuracy: location.accuracy,
-            altitude: location.altitude,
-            timestamp: location.timestamp
+      websocket.onmessage = (event) => {
+        try {
+          const { type, data } = JSON.parse(event.data);
+          console.log('Mobile WebSocket message:', type, data);
+          
+          switch (type) {
+            case 'mobile_registered':
+              console.log('Mobile registered successfully');
+              break;
+              
+            case 'auth_success_confirmed':
+            case 'passkey_created_confirmed':
+              console.log('Authentication confirmed by server');
+              if (requireLocation) {
+                setAuthState("location-capture");
+                setTimeout(() => {
+                  captureAndSendLocation();
+                }, 500);
+              } else {
+                setAuthState("success");
+              }
+              break;
+              
+            case 'request_location':
+              console.log('Desktop requesting location data');
+              // Immediately capture and send location when requested
+              if (authData) {
+                captureAndSendLocation();
+              } else {
+                console.error('No auth data available for location request');
+                setErrorMessage('Authentication data missing');
+                setAuthState("error");
+              }
+              break;
+              
+            case 'error':
+              console.error('WebSocket error:', data.message);
+              setErrorMessage(data.message);
+              setAuthState("error");
+              break;
           }
-        },
-        message: "Passkey authentication and location capture successful",
-        authData: authData,
-        location: {
-          latitude: location.latitude,
-          longitude: location.longitude,
-          accuracy: location.accuracy,
-          altitude: location.altitude,
-          timestamp: location.timestamp
-        },
-        nextStep: "complete"
+        } catch (error) {
+          console.error('Error parsing WebSocket message:', error);
+        }
       };
-      
-      console.log('Sending complete auth + location to desktop:', completeAuthMessage);
-      ws.send(JSON.stringify(completeAuthMessage));
-      
-      // Add a small delay before showing success
-      setTimeout(() => {
-        setAuthState("success");
-      }, 1000);
-    } else {
-      throw new Error('WebSocket not connected');
-    }
-    
-  } catch (error) {
-    console.error('Location capture error:', error);
-    setErrorMessage(error.message || 'Failed to capture location');
-    setAuthState("error");
-  }
-};
       
       websocket.onclose = () => {
         console.log('Mobile WebSocket disconnected');
@@ -259,7 +114,7 @@ const captureAndSendLocation = async () => {
       console.error('Failed to create WebSocket:', error);
       setWsConnected(false);
     }
-  }, [sessionId, userEmail, mode, requireLocation]);
+  }, [sessionId, userEmail, mode, requireLocation, authData]);
 
   // Extract URL parameters and connect WebSocket
   useEffect(() => {
@@ -354,27 +209,54 @@ const captureAndSendLocation = async () => {
     });
   };
 
-  // Capture location and send to desktop via WebSocket
+  // Updated captureAndSendLocation function - sends auth + location together
   const captureAndSendLocation = async () => {
     try {
       setAuthState("location-capture");
+      console.log('Starting location capture...');
+      
       const location = await captureLocation();
+      console.log('Location captured:', location);
       
       setAuthState("processing");
       
-      // Send location data to desktop via WebSocket
+      // Send BOTH authentication data AND location data together
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'location_received',
+        const completeAuthMessage = {
+          type: 'passkey_auth_success',
           data: {
             sessionId,
-            location,
-            authData
-          }
-        }));
+            authData: authData,
+            location: {
+              latitude: location.latitude,
+              longitude: location.longitude,
+              accuracy: location.accuracy,
+              altitude: location.altitude,
+              timestamp: location.timestamp
+            }
+          },
+          message: "Passkey authentication and location capture successful",
+          authData: authData,
+          location: {
+            latitude: location.latitude,
+            longitude: location.longitude,
+            accuracy: location.accuracy,
+            altitude: location.altitude,
+            timestamp: location.timestamp
+          },
+          nextStep: "complete"
+        };
+        
+        console.log('Sending complete auth + location to desktop:', completeAuthMessage);
+        ws.send(JSON.stringify(completeAuthMessage));
+        
+        // Add a small delay before showing success
+        setTimeout(() => {
+          setAuthState("success");
+        }, 1000);
+      } else {
+        throw new Error('WebSocket not connected');
       }
-      
-      setAuthState("success");
       
     } catch (error) {
       console.error('Location capture error:', error);
@@ -423,7 +305,8 @@ const captureAndSendLocation = async () => {
             userAgent: navigator.userAgent,
             platform: navigator.platform,
             timestamp: Date.now()
-          }
+          },
+          type: "authentication"
         };
         
         setAuthData(authInfo);
@@ -432,15 +315,22 @@ const captureAndSendLocation = async () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: 'passkey_auth_success',
-            data: authInfo
+            data: { 
+              sessionId,
+              authData: authInfo
+            },
+            message: "Passkey authentication successful. Checking location...",
+            authData: authInfo,
+            nextStep: "location_check"
           }));
         }
         
-        // If location is required, capture it immediately
+        // If location is required, capture it immediately after authentication
         if (requireLocation) {
+          console.log('Location required, capturing automatically...');
           setTimeout(() => {
             captureAndSendLocation();
-          }, 1000);
+          }, 500);
         } else {
           setAuthState("success");
         }
@@ -517,7 +407,8 @@ const captureAndSendLocation = async () => {
             userAgent: navigator.userAgent,
             platform: navigator.platform,
             timestamp: Date.now()
-          }
+          },
+          type: "registration"
         };
         
         setAuthData(authInfo);
@@ -526,7 +417,13 @@ const captureAndSendLocation = async () => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({
             type: 'passkey_created',
-            data: authInfo
+            data: { 
+              sessionId,
+              authData: authInfo
+            },
+            message: "Passkey created successfully. Checking location...",
+            authData: authInfo,
+            nextStep: "location_check"
           }));
         }
         
@@ -534,7 +431,7 @@ const captureAndSendLocation = async () => {
         if (requireLocation) {
           setTimeout(() => {
             captureAndSendLocation();
-          }, 1000);
+          }, 500);
         } else {
           setAuthState("success");
         }
