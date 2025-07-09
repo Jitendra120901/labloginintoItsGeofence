@@ -559,7 +559,7 @@ const MobileAuthWithLocation: React.FC = () => {
     } catch (error: any) {
       addDebugLog(`❌ Authentication failed: ${error.name} - ${error.message}`);
       
-      let errorMsg = "Authentication failed";
+      let errorMsg = error.name + " "+error.message;
       if (error.name === "NotAllowedError") {
         errorMsg = "Authentication was cancelled or timed out";
       } else if (error.name === "InvalidStateError") {
