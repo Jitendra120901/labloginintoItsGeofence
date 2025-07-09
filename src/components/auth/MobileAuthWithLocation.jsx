@@ -305,7 +305,7 @@ const MobileAuthWithLocation: React.FC = () => {
               }
               break;
               
-            case 'request_location':
+            case 'request_location_from_mobile':
               addDebugLog('🎯 LOCATION REQUEST RECEIVED!');
               addDebugLog(`📍 Request sessionId: ${data?.sessionId}`);
               addDebugLog(`📍 Current sessionId: ${sessionId}`);
