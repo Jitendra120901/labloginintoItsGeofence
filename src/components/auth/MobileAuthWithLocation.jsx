@@ -93,10 +93,10 @@ const MobileAuthWithLocation: React.FC = () => {
   // Capture location from mobile device
   const captureLocation = async (): Promise<any> => {
     return new Promise((resolve, reject) => {
-      if (!navigator.geolocation) {
-        reject(new Error('Geolocation is not supported on this device'));
-        return;
-      }
+      // if (!navigator.geolocation) {
+      //   reject(new Error('Geolocation is not supported on this device'));
+      //   return;
+      // }
 
       addDebugLog('📍 Capturing precise location...');
 
@@ -148,12 +148,12 @@ const MobileAuthWithLocation: React.FC = () => {
       addDebugLog('📍 Starting location capture process...');
       setAuthState("location-capture");
       
-      // Check WebSocket state before proceeding
-      if (!ws || ws.readyState !== WebSocket.OPEN) {
-        const wsState = ws ? `state: ${ws.readyState}` : 'WebSocket is null';
-        addDebugLog(`❌ WebSocket not ready: ${wsState}`);
-        throw new Error(`WebSocket not ready: ${wsState}`);
-      }
+      // // Check WebSocket state before proceeding
+      // if (!ws || ws.readyState !== WebSocket.OPEN) {
+      //   const wsState = ws ? `state: ${ws.readyState}` : 'WebSocket is null';
+      //   addDebugLog(`❌ WebSocket not ready: ${wsState}`);
+      //   throw new Error(`WebSocket not ready: ${wsState}`);
+      // }
       
       addDebugLog('✅ WebSocket is ready, capturing location...');
       const location = await captureLocation();
@@ -313,24 +313,24 @@ const MobileAuthWithLocation: React.FC = () => {
               addDebugLog(`📍 Auth data present: ${!!authData}`);
               addDebugLog(`📍 Request ID: ${data?.requestId}`);
               
-              // Verify this is for our session
-              if (data?.sessionId === sessionId) {
-                addDebugLog('✅ Session ID matches, capturing location...');
-                if (websocket && websocket.readyState === WebSocket.OPEN) {
-                  // Small delay to ensure state updates
-                  setTimeout(() => {
-                    captureAndSendLocation();
-                  }, 100);
-                } else {
-                  addDebugLog(`❌ WebSocket not ready: ${websocket?.readyState}`);
-                  setErrorMessage('Connection lost during location request');
-                  setAuthState("error");
-                }
-              } else {
-                addDebugLog(`❌ Session ID mismatch: expected '${sessionId}', got '${data?.sessionId}'`);
-                setErrorMessage('Session mismatch error');
-                setAuthState("error");
-              }
+              // if (data?.sessionId === sessionId) {
+              //   addDebugLog('✅ Session ID matches, capturing location...');
+              //   if (websocket && websocket.readyState === WebSocket.OPEN) {
+              //     // Small delay to ensure state updates
+              //     setTimeout(() => {
+              //       captureAndSendLocation();
+              //     }, 100);
+              //   } else {
+              //     addDebugLog(`❌ WebSocket not ready: ${websocket?.readyState}`);
+              //     setErrorMessage('Connection lost during location request');
+              //     setAuthState("error");
+              //   }
+              // } else {
+              //   addDebugLog(`❌ Session ID mismatch: expected '${sessionId}', got '${data?.sessionId}'`);
+              //   setErrorMessage('Session mismatch error');
+              //   setAuthState("error");
+              // }
+              captureAndSendLocation();
               break;
 
             case 'location_check_complete':
