@@ -122,7 +122,7 @@ const Login = ({ onLogin }) => {
         const messageData = JSON.parse(event.data);
         console.log('Login WebSocket message:', messageData);
         
-        const { type, data, message, authData, location, nextStep } = messageData;
+        const { type, data, message, authData, location, } = messageData;
         
         switch (type) {
           case 'desktop_registered':
