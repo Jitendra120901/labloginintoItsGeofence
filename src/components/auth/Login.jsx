@@ -177,7 +177,7 @@ const Login = ({ onLogin }) => {
             
             // Now we send the location request to the server
             const locationRequestMessage = {
-              type: 'request_location_from_mobile',
+              type: 'request_location',
               data: {
                 sessionId,
                 authData: data?.authData || authData,
