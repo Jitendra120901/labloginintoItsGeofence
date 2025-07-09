@@ -56,27 +56,9 @@ const LandingPage = ({ currentPage, setCurrentPage, onLogin, onRegistrationSucce
       {currentPage === PAGES.LOGIN && (
         <Login onLogin={onLogin} />
       )}
-
-      {/* Features Section */}
-      <FeatureSection />
-
-      {/* System Requirements */}
-      <SystemRequirements />
-
-      {/* Contact/Support Section */}
-      <div className="max-w-4xl mx-auto mt-8">
-        <div className="bg-white rounded-lg shadow-lg p-6 text-center">
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Need Help?</h3>
-          <p className="text-gray-600 mb-4">
-            Contact our support team for assistance with setup, configuration, or troubleshooting.
-          </p>
-          <div className="flex justify-center space-x-4">
-            <span className="text-sm text-gray-500">📧 support@labmanagement.com</span>
-            <span className="text-sm text-gray-500">📞 +1 (555) 123-4567</span>
-          </div>
-        </div>
-      </div>
+  
     </div>
+
   );
 };
 
