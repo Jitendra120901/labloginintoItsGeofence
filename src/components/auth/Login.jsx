@@ -28,6 +28,18 @@ const Login = ({ onLogin }) => {
   const [wsConnected, setWsConnected] = useState(false);
   const [ws, setWs] = useState(null);
   const [locationData, setLocationData] = useState(null);
+  const [authData, setAuthData] = useState(null);
+  
+  // Debug logging
+  const [debugLogs, setDebugLogs] = useState([]);
+  const [showDebugPanel, setShowDebugPanel] = useState(false);
+
+  const addDebugLog = (message) => {
+    const timestamp = new Date().toLocaleTimeString();
+    const logEntry = `[${timestamp}] ${message}`;
+    console.log(logEntry);
+    setDebugLogs(prev => [...prev.slice(-10), logEntry]);
+  };
 
   const handleChange = (e) => {
     setFormData({
@@ -97,15 +109,17 @@ const Login = ({ onLogin }) => {
   const connectWebSocket = () => {
     const wsUrl = 'wss://labmanagementdatabase.onrender.com';
     
+    addDebugLog(`🔗 Connecting to WebSocket: ${wsUrl}`);
+    
     const websocket = new WebSocket(wsUrl);
     
     websocket.onopen = () => {
-      console.log('Login WebSocket connected');
+      addDebugLog('✅ Desktop WebSocket connected');
       setWsConnected(true);
       setWs(websocket);
       
       // Register desktop session for login
-      websocket.send(JSON.stringify({
+      const registrationMessage = {
         type: 'register_desktop',
         data: {
           sessionId,
@@ -113,150 +127,221 @@ const Login = ({ onLogin }) => {
           labName: 'Lab Login',
           mode: 'login'
         }
-      }));
+      };
+      
+      addDebugLog('📤 Registering desktop session');
+      websocket.send(JSON.stringify(registrationMessage));
     };
     
-    // Updated WebSocket message handler for Login component
+    // Enhanced WebSocket message handler
     websocket.onmessage = (event) => {
       try {
         const messageData = JSON.parse(event.data);
-        console.log('Login WebSocket message:', messageData);
+        addDebugLog(`🔵 Received: ${messageData.type}`);
+        console.log('Desktop WebSocket message:', messageData);
         
-        const { type, data, message, authData, location, } = messageData;
+        const { type, data } = messageData;
         
         switch (type) {
+          case 'connected':
+            addDebugLog(`🔗 Connected with ID: ${data?.connectionId}`);
+            break;
+            
           case 'desktop_registered':
-            console.log('Desktop registered for login');
+            addDebugLog('✅ Desktop registered for login');
+            setQrAuthState('scanning');
             break;
             
           case 'mobile_connected':
+            addDebugLog('📱 Mobile device connected');
             setQrAuthState('authenticating');
+            setLocationStatus('Mobile device connected. Complete authentication...');
             break;
             
           case 'passkey_verified':
           case 'passkey_created':
-            console.log('Backend confirmed passkey authentication');
+            addDebugLog('🔐 Passkey authentication confirmed');
             setQrAuthState('processing');
+            setLocationStatus('Authentication successful. Requesting location...');
+            
+            // Store auth data
+            setAuthData(data?.authData);
+            
+            // The server should send us request_location_from_mobile next
+            // We don't need to do anything here, just wait
+            break;
+            
+          case 'request_location_from_mobile':
+            addDebugLog('📍 Server instructing desktop to request location');
             setLocationStatus('Requesting location from mobile device...');
             
-            // The backend sends authData in data.authData for passkey_verified
-            const confirmedAuthData = data?.authData || authData || data;
-            
-            // Request location from mobile
-            websocket.send(JSON.stringify({
+            // Now we send the location request to the server
+            const locationRequestMessage = {
               type: 'request_location',
-              data: { 
-                sessionId, 
-                authData: confirmedAuthData,
-                requestId: Date.now()
+              data: {
+                sessionId,
+                authData: data?.authData || authData,
+                requestId: Date.now().toString()
               }
-            }));
+            };
+            
+            addDebugLog('📤 Sending location request to server');
+            websocket.send(JSON.stringify(locationRequestMessage));
             break;
             
-          case 'passkey_auth_success':
-            console.log('Direct auth success from mobile');
-            setQrAuthState('processing');
-            setLocationStatus('Processing authentication and location data...');
-            
-            // Check if location data is included
-            const locationData = location || data?.location;
-            const authInfo = authData || data?.authData;
-            
-            if (locationData && locationData.latitude && locationData.longitude) {
-              console.log('Location data found in auth message:', locationData);
-              setLocationData(locationData);
-              processQRLogin(locationData, authInfo);
-            } else {
-              // Request location if not included
-              websocket.send(JSON.stringify({
-                type: 'request_location',
-                data: { 
-                  sessionId, 
-                  authData: authInfo,
-                  requestId: Date.now()
-                }
-              }));
-            }
-            break;
-
           case 'location_received':
-            console.log('Location received from mobile device');
-            const receivedLocation = data?.location || data;
-            const receivedAuth = data?.authData || authData;
+            addDebugLog('📍 Location received from mobile device');
+            const receivedLocation = data?.location;
+            const receivedAuth = data?.authData;
             
             if (receivedLocation && receivedLocation.latitude && receivedLocation.longitude) {
               setLocationData(receivedLocation);
-              processQRLogin(receivedLocation, receivedAuth);
+              setLocationStatus('Location received. Performing geofence check...');
+              
+              // Perform geofence check
+              performGeofenceCheck(receivedLocation, receivedAuth);
             } else {
-              setError('Invalid location data received');
+              addDebugLog('❌ Invalid location data received');
+              setError('Invalid location data received from mobile device');
               setQrAuthState('error');
             }
             break;
+            
+          case 'access_granted':
+            addDebugLog('✅ Access granted by server');
+            setQrAuthState('success');
+            setLocationStatus('Access granted! Redirecting...');
+            
+            // Complete the login process
+            setTimeout(() => {
+              onLogin(data?.user || { email: formData.email }, 'qr_token', {
+                ...locationData,
+                authMethod: 'qr_passkey',
+                sessionId
+              });
+            }, 1500);
+            break;
+            
+          case 'access_denied':
+            addDebugLog('❌ Access denied by server');
+            setError(data?.message || 'Access denied');
+            setQrAuthState('error');
+            setLocationStatus('');
+            break;
 
           case 'error':
-            setError(data?.message || message || 'Authentication error');
+            addDebugLog(`❌ Server error: ${data?.message}`);
+            setError(data?.message || 'Authentication error');
             setQrAuthState('error');
+            setLocationStatus('');
             break;
 
           default:
-            console.log('Unknown message type:', type, 'Full message:', messageData);
+            addDebugLog(`❓ Unknown message type: ${type}`);
             break;
         }
       } catch (error) {
+        addDebugLog(`❌ Error parsing message: ${error.message}`);
         console.error('Error parsing WebSocket message:', error);
-        setError('Communication error with mobile device');
+        setError('Communication error with server');
         setQrAuthState('error');
       }
     };
     
-    websocket.onclose = () => {
-      console.log('Login WebSocket disconnected');
+    websocket.onclose = (event) => {
+      addDebugLog(`🔌 WebSocket closed: ${event.code} - ${event.reason || 'No reason'}`);
       setWsConnected(false);
       setWs(null);
       
-      // Attempt reconnection
-      setTimeout(connectWebSocket, 3000);
+      // Attempt reconnection if not in terminal states
+      if (qrAuthState !== 'success' && qrAuthState !== 'error') {
+        setTimeout(() => {
+          addDebugLog('🔄 Attempting reconnection...');
+          connectWebSocket();
+        }, 3000);
+      }
     };
     
     websocket.onerror = (error) => {
-      console.error('Login WebSocket error:', error);
+      addDebugLog(`❌ WebSocket error: ${error}`);
       setWsConnected(false);
     };
   };
 
-  // Process QR-based login with mobile location
-  const processQRLogin = async (location, authData) => {
+  // Perform geofence check on desktop
+  const performGeofenceCheck = async (location, authInfo) => {
     try {
-      setLocationStatus('Processing login with mobile location...');
+      addDebugLog('🎯 Performing geofence check...');
       
-      const response = await authAPI.login({
-        email: formData.email,
-        passkey: true,
-        passkeyData: authData,
-        latitude: location.latitude,
-        longitude: location.longitude,
-        accuracy: location.accuracy,
-        authMethod: 'qr_passkey',
-        sessionId: sessionId
-      });
-
-      setLocationStatus('Login successful!');
-      setQrAuthState('success');
+      // Example lab coordinates - replace with actual coordinates
+      const labLocation = {
+        latitude: 30.7333,  // Replace with actual lab coordinates
+        longitude: 76.7794  // Replace with actual lab coordinates
+      };
       
-      setTimeout(() => {
-        onLogin(response.user, response.token, {
-          ...location,
-          authMethod: 'qr_passkey',
-          sessionId
-        });
-      }, 1500);
+      const distance = calculateDistance(
+        location.latitude,
+        location.longitude,
+        labLocation.latitude,
+        labLocation.longitude
+      );
       
-    } catch (err) {
-      console.error('QR Login error:', err);
-      setError(err.message);
-      setQrAuthState('error');
-      setLocationStatus('');
+      addDebugLog(`📏 Distance to lab: ${distance.toFixed(2)}m`);
+      
+      const maxDistance = 100; // 100 meters radius
+      const isWithinGeofence = distance <= maxDistance;
+      
+      // Send result back to server
+      const locationCheckResult = {
+        type: 'location_check_complete',
+        data: {
+          sessionId,
+          success: isWithinGeofence,
+          distance: Math.round(distance),
+          location: location,
+          authData: authInfo,
+          error: isWithinGeofence ? null : `You must be within ${maxDistance}m of the lab (currently ${Math.round(distance)}m away)`
+        }
+      };
+      
+      addDebugLog(`📤 Sending location check result: ${isWithinGeofence ? 'PASS' : 'FAIL'}`);
+      ws.send(JSON.stringify(locationCheckResult));
+      
+    } catch (error) {
+      addDebugLog(`❌ Geofence check error: ${error.message}`);
+      
+      // Send error result
+      const errorResult = {
+        type: 'location_check_complete',
+        data: {
+          sessionId,
+          success: false,
+          distance: null,
+          location: location,
+          authData: authInfo,
+          error: 'Failed to verify location'
+        }
+      };
+      
+      ws.send(JSON.stringify(errorResult));
     }
+  };
+
+  // Calculate distance between two coordinates
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371000; // Earth's radius in meters
+    const dLat = toRadians(lat2 - lat1);
+    const dLon = toRadians(lon2 - lon1);
+    const a = 
+      Math.sin(dLat/2) * Math.sin(dLat/2) +
+      Math.cos(toRadians(lat1)) * Math.cos(toRadians(lat2)) * 
+      Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  const toRadians = (degrees) => {
+    return degrees * (Math.PI / 180);
   };
 
   // Generate QR code for mobile authentication
@@ -271,6 +356,8 @@ const Login = ({ onLogin }) => {
     
     const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(mobileAuthUrl)}`;
     setQrCodeUrl(qrUrl);
+    
+    addDebugLog('🎯 QR code generated');
   }, [formData.email, sessionId]);
 
   // Initialize QR authentication
@@ -282,6 +369,9 @@ const Login = ({ onLogin }) => {
     
     setAuthMethod('qr');
     setQrAuthState('scanning');
+    setError('');
+    setLocationStatus('');
+    setDebugLogs([]);
     generateQRCode();
     connectWebSocket();
   };
@@ -292,6 +382,7 @@ const Login = ({ onLogin }) => {
     setQrAuthState('scanning');
     setError('');
     setLocationStatus('');
+    setDebugLogs([]);
     if (ws) {
       ws.close();
     }
@@ -318,7 +409,7 @@ const Login = ({ onLogin }) => {
     switch (qrAuthState) {
       case 'scanning': return 'Scan QR code with your mobile device';
       case 'authenticating': return 'Complete passkey authentication on mobile';
-      case 'processing': return 'Processing login with mobile location...';
+      case 'processing': return 'Processing authentication and location...';
       case 'success': return 'Login successful! Redirecting...';
       case 'error': return error || 'Authentication failed';
       default: return 'Scan QR code with your mobile device';
@@ -342,6 +433,7 @@ const Login = ({ onLogin }) => {
           <div className="text-center">
             <p className="text-sm text-gray-600">Logging in as:</p>
             <p className="font-semibold text-gray-900">{formData.email}</p>
+            <p className="text-xs text-gray-500">Session: {sessionId.substring(0, 20)}...</p>
             <div className="flex items-center justify-center mt-2">
               {wsConnected ? (
                 <span className="inline-flex items-center text-green-600 text-xs">
@@ -391,9 +483,10 @@ const Login = ({ onLogin }) => {
             {locationData && qrAuthState === 'processing' && (
               <div className="mt-3 p-2 bg-green-50 rounded-lg">
                 <p className="text-xs text-green-700">
-                  ✓ Location captured from mobile device<br/>
+                  ✓ Location received from mobile device<br/>
                   Lat: {locationData.latitude?.toFixed(6)}<br/>
-                  Lng: {locationData.longitude?.toFixed(6)}
+                  Lng: {locationData.longitude?.toFixed(6)}<br/>
+                  Accuracy: ±{Math.round(locationData.accuracy)}m
                 </p>
               </div>
             )}
@@ -405,6 +498,26 @@ const Login = ({ onLogin }) => {
             )}
           </div>
 
+          {/* Debug Panel */}
+          {showDebugPanel && (
+            <div className="bg-black text-green-400 p-3 rounded-lg text-xs font-mono max-h-48 overflow-y-auto">
+              <div className="flex justify-between items-center mb-2">
+                <span className="font-bold">🔍 Debug Console</span>
+                <button 
+                  onClick={() => setShowDebugPanel(false)}
+                  className="text-red-400 hover:text-red-300"
+                >
+                  ✕
+                </button>
+              </div>
+              <div className="space-y-1">
+                {debugLogs.map((log, index) => (
+                  <div key={index} className="break-words">{log}</div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* Action buttons */}
           <div className="space-y-3">
             {qrAuthState === 'error' && (
@@ -412,7 +525,12 @@ const Login = ({ onLogin }) => {
                 onClick={() => {
                   setQrAuthState('scanning');
                   setError('');
+                  setLocationStatus('');
                   generateQRCode();
+                  if (ws) {
+                    ws.close();
+                  }
+                  setTimeout(connectWebSocket, 1000);
                 }}
                 className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors"
               >
@@ -420,12 +538,20 @@ const Login = ({ onLogin }) => {
               </button>
             )}
             
-            <button
-              onClick={switchToTraditional}
-              className="w-full px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors"
-            >
-              Use Traditional Login
-            </button>
+            <div className="flex space-x-2">
+              <button
+                onClick={() => setShowDebugPanel(!showDebugPanel)}
+                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
+              >
+                {showDebugPanel ? 'Hide' : 'Show'} Debug
+              </button>
+              <button
+                onClick={switchToTraditional}
+                className="flex-1 px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors text-sm"
+              >
+                Traditional Login
+              </button>
+            </div>
           </div>
         </div>
       </div>
