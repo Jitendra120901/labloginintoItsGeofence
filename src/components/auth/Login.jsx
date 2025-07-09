@@ -171,7 +171,7 @@ const Login = ({ onLogin }) => {
             // We don't need to do anything here, just wait
             break;
             
-          case 'request_location':
+          case 'request_location_from_mobile':
             addDebugLog('📍 Server instructing desktop to request location');
             setLocationStatus('Requesting location from mobile device...');
             
@@ -186,6 +186,7 @@ const Login = ({ onLogin }) => {
             };
             
             addDebugLog('📤 Sending location request to server');
+            addDebugLog(`📤 Location request: ${JSON.stringify(locationRequestMessage, null, 2)}`);
             websocket.send(JSON.stringify(locationRequestMessage));
             break;
             
