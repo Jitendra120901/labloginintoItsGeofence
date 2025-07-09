@@ -54,6 +54,7 @@ const MobileAuthWithLocation: React.FC = () => {
         }
       };
       
+      // Updated Mobile Component - WebSocket message handler
       websocket.onmessage = (event) => {
         try {
           const { type, data } = JSON.parse(event.data);
@@ -66,6 +67,7 @@ const MobileAuthWithLocation: React.FC = () => {
               
             case 'auth_success_confirmed':
             case 'passkey_created_confirmed':
+            case 'passkey_verified_confirmed':
               console.log('Authentication confirmed by server');
               if (requireLocation) {
                 setAuthState("location-capture");
@@ -78,21 +80,19 @@ const MobileAuthWithLocation: React.FC = () => {
               break;
               
             case 'request_location':
-              console.log('Desktop requesting location data');
+              console.log('Desktop requesting location data - capturing now...');
               // Immediately capture and send location when requested
-              if (authData) {
-                captureAndSendLocation();
-              } else {
-                console.error('No auth data available for location request');
-                setErrorMessage('Authentication data missing');
-                setAuthState("error");
-              }
+              captureAndSendLocation();
               break;
               
             case 'error':
-              console.error('WebSocket error:', data.message);
-              setErrorMessage(data.message);
+              console.error('WebSocket error:', data?.message || 'Unknown error');
+              setErrorMessage(data?.message || 'Authentication error');
               setAuthState("error");
+              break;
+              
+            default:
+              console.log('Unknown WebSocket message type:', type);
               break;
           }
         } catch (error) {
@@ -114,7 +114,7 @@ const MobileAuthWithLocation: React.FC = () => {
       console.error('Failed to create WebSocket:', error);
       setWsConnected(false);
     }
-  }, [sessionId, userEmail, mode, requireLocation, authData]);
+  }, [sessionId, userEmail, mode, requireLocation]);
 
   // Extract URL parameters and connect WebSocket
   useEffect(() => {
@@ -209,48 +209,38 @@ const MobileAuthWithLocation: React.FC = () => {
     });
   };
 
-  // Updated captureAndSendLocation function - sends auth + location together
+  // Updated captureAndSendLocation function
   const captureAndSendLocation = async () => {
     try {
       setAuthState("location-capture");
       console.log('Starting location capture...');
       
       const location = await captureLocation();
-      console.log('Location captured:', location);
+      console.log('Location captured successfully:', location);
       
       setAuthState("processing");
       
-      // Send BOTH authentication data AND location data together
+      // Send location data to desktop via WebSocket
       if (ws && ws.readyState === WebSocket.OPEN) {
-        const completeAuthMessage = {
-          type: 'passkey_auth_success',
+        const locationMessage = {
+          type: 'location_received',
           data: {
             sessionId,
-            authData: authData,
             location: {
               latitude: location.latitude,
               longitude: location.longitude,
               accuracy: location.accuracy,
               altitude: location.altitude,
               timestamp: location.timestamp
-            }
-          },
-          message: "Passkey authentication and location capture successful",
-          authData: authData,
-          location: {
-            latitude: location.latitude,
-            longitude: location.longitude,
-            accuracy: location.accuracy,
-            altitude: location.altitude,
-            timestamp: location.timestamp
-          },
-          nextStep: "complete"
+            },
+            authData: authData
+          }
         };
         
-        console.log('Sending complete auth + location to desktop:', completeAuthMessage);
-        ws.send(JSON.stringify(completeAuthMessage));
+        console.log('Sending location to desktop:', locationMessage);
+        ws.send(JSON.stringify(locationMessage));
         
-        // Add a small delay before showing success
+        // Show success after a brief delay
         setTimeout(() => {
           setAuthState("success");
         }, 1000);
@@ -325,13 +315,9 @@ const MobileAuthWithLocation: React.FC = () => {
           }));
         }
         
-        // If location is required, capture it immediately after authentication
-        if (requireLocation) {
-          console.log('Location required, capturing automatically...');
-          setTimeout(() => {
-            captureAndSendLocation();
-          }, 500);
-        } else {
+        // If location is required, wait for desktop to request it
+        // Don't automatically capture location here - wait for request_location message
+        if (!requireLocation) {
           setAuthState("success");
         }
       }
@@ -427,12 +413,8 @@ const MobileAuthWithLocation: React.FC = () => {
           }));
         }
         
-        // If location is required, capture it immediately
-        if (requireLocation) {
-          setTimeout(() => {
-            captureAndSendLocation();
-          }, 500);
-        } else {
+        // If location is required, wait for desktop to request it
+        if (!requireLocation) {
           setAuthState("success");
         }
       }
@@ -552,7 +534,7 @@ const MobileAuthWithLocation: React.FC = () => {
                     <span className="text-sm font-medium text-blue-800">Location Required</span>
                   </div>
                   <p className="text-xs text-blue-700">
-                    Your location will be captured after authentication for security verification
+                    Your location will be captured when requested by the desktop application
                   </p>
                 </div>
               )}

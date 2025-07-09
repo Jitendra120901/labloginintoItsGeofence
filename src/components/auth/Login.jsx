@@ -116,10 +116,13 @@ const Login = ({ onLogin }) => {
       }));
     };
     
+    // Updated WebSocket message handler for Login component
     websocket.onmessage = (event) => {
       try {
-        const { type, data, message, authData, location, nextStep } = JSON.parse(event.data);
-        console.log('Login WebSocket message:', { type, data, message, authData, location, nextStep });
+        const messageData = JSON.parse(event.data);
+        console.log('Login WebSocket message:', messageData);
+        
+        const { type, data, message, authData, location, nextStep } = messageData;
         
         switch (type) {
           case 'desktop_registered':
@@ -130,9 +133,28 @@ const Login = ({ onLogin }) => {
             setQrAuthState('authenticating');
             break;
             
-          // Handle authentication success with location data
+          case 'passkey_verified':
+          case 'passkey_created':
+            console.log('Backend confirmed passkey authentication');
+            setQrAuthState('processing');
+            setLocationStatus('Requesting location from mobile device...');
+            
+            // The backend sends authData in data.authData for passkey_verified
+            const confirmedAuthData = data?.authData || authData || data;
+            
+            // Request location from mobile
+            websocket.send(JSON.stringify({
+              type: 'request_location',
+              data: { 
+                sessionId, 
+                authData: confirmedAuthData,
+                requestId: Date.now()
+              }
+            }));
+            break;
+            
           case 'passkey_auth_success':
-            console.log('Received auth success from mobile');
+            console.log('Direct auth success from mobile');
             setQrAuthState('processing');
             setLocationStatus('Processing authentication and location data...');
             
@@ -144,16 +166,8 @@ const Login = ({ onLogin }) => {
               console.log('Location data found in auth message:', locationData);
               setLocationData(locationData);
               processQRLogin(locationData, authInfo);
-            } else if (nextStep === "complete") {
-              // Location should be included, but let's wait a moment
-              setTimeout(() => {
-                if (!locationData) {
-                  setError('Location data missing from authentication');
-                  setQrAuthState('error');
-                }
-              }, 2000);
             } else {
-              // No location yet, request it
+              // Request location if not included
               websocket.send(JSON.stringify({
                 type: 'request_location',
                 data: { 
@@ -163,21 +177,6 @@ const Login = ({ onLogin }) => {
                 }
               }));
             }
-            break;
-
-          case 'passkey_verified':
-          case 'passkey_created':
-            setQrAuthState('processing');
-            setLocationStatus('Requesting location from mobile device...');
-            
-            websocket.send(JSON.stringify({
-              type: 'request_location',
-              data: { 
-                sessionId, 
-                authData: authData || data?.authData || data,
-                requestId: Date.now()
-              }
-            }));
             break;
 
           case 'location_received':
@@ -199,32 +198,8 @@ const Login = ({ onLogin }) => {
             setQrAuthState('error');
             break;
 
-          // Handle any other message format
           default:
-            // Check if this is an auth success message in different format
-            if (message && message.includes('Passkey authentication successful') && authData) {
-              setQrAuthState('processing');
-              setLocationStatus('Processing authentication data...');
-              
-              // Check if location is also included
-              if (location && location.latitude && location.longitude) {
-                console.log('Location found in message:', location);
-                setLocationData(location);
-                processQRLogin(location, authData);
-              } else {
-                // Request location if not included
-                websocket.send(JSON.stringify({
-                  type: 'request_location',
-                  data: { 
-                    sessionId, 
-                    authData: authData,
-                    requestId: Date.now()
-                  }
-                }));
-              }
-            } else {
-              console.log('Unknown WebSocket message type:', type, 'Full message:', JSON.parse(event.data));
-            }
+            console.log('Unknown message type:', type, 'Full message:', messageData);
             break;
         }
       } catch (error) {
