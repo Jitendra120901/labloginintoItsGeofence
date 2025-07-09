@@ -27,6 +27,7 @@ const MobileAuthWithLocation: React.FC = () => {
   const [locationData, setLocationData] = useState<any>(null);
   const [authData, setAuthData] = useState<any>(null);
   const [requireLocation, setRequireLocation] = useState<boolean>(false);
+  const [locationPermissionStatus, setLocationPermissionStatus] = useState<string>('unknown');
   
   // Debug states
   const [debugLogs, setDebugLogs] = useState<string[]>([]);
@@ -45,6 +46,50 @@ const MobileAuthWithLocation: React.FC = () => {
     return typeof window !== 'undefined' && window.PublicKeyCredential !== undefined;
   };
 
+  // Check location permission status
+  const checkLocationPermission = async (): Promise<string> => {
+    if (!navigator.geolocation) {
+      return 'not_supported';
+    }
+
+    try {
+      const permission = await navigator.permissions.query({ name: 'geolocation' });
+      addDebugLog(`📍 Location permission: ${permission.state}`);
+      setLocationPermissionStatus(permission.state);
+      return permission.state;
+    } catch (error) {
+      addDebugLog(`📍 Error checking location permission: ${error.message}`);
+      return 'unknown';
+    }
+  };
+
+  // Request location permission explicitly
+  const requestLocationPermission = async (): Promise<boolean> => {
+    addDebugLog('📍 Requesting location permission...');
+    
+    try {
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          resolve,
+          reject,
+          {
+            enableHighAccuracy: false,
+            timeout: 10000,
+            maximumAge: 300000 // 5 minutes
+          }
+        );
+      });
+
+      addDebugLog('✅ Location permission granted');
+      setLocationPermissionStatus('granted');
+      return true;
+    } catch (error: any) {
+      addDebugLog(`❌ Location permission denied: ${error.message}`);
+      setLocationPermissionStatus('denied');
+      return false;
+    }
+  };
+
   // Capture location from mobile device
   const captureLocation = async (): Promise<any> => {
     return new Promise((resolve, reject) => {
@@ -53,7 +98,7 @@ const MobileAuthWithLocation: React.FC = () => {
         return;
       }
 
-      addDebugLog('📍 Requesting geolocation permission...');
+      addDebugLog('📍 Capturing precise location...');
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -68,12 +113,12 @@ const MobileAuthWithLocation: React.FC = () => {
             timestamp: Date.now()
           };
           
-          addDebugLog(`📍 Geolocation success: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)} (±${Math.round(location.accuracy)}m)`);
+          addDebugLog(`📍 Location captured: ${location.latitude.toFixed(6)}, ${location.longitude.toFixed(6)} (±${Math.round(location.accuracy)}m)`);
           setLocationData(location);
           resolve(location);
         },
         (error) => {
-          addDebugLog(`📍 Geolocation error: ${error.code} - ${error.message}`);
+          addDebugLog(`📍 Location capture error: ${error.code} - ${error.message}`);
           let errorMsg = 'Unable to get location';
           switch (error.code) {
             case error.PERMISSION_DENIED:
@@ -131,7 +176,7 @@ const MobileAuthWithLocation: React.FC = () => {
       };
       
       addDebugLog('📤 Sending location to server...');
-      addDebugLog(`📤 Message: ${JSON.stringify(locationMessage).substring(0, 100)}...`);
+      addDebugLog(`📤 Location data: Lat: ${location.latitude.toFixed(6)}, Lng: ${location.longitude.toFixed(6)}, Accuracy: ${Math.round(location.accuracy)}m`);
       
       ws.send(JSON.stringify(locationMessage));
       
@@ -144,6 +189,24 @@ const MobileAuthWithLocation: React.FC = () => {
       setAuthState("error");
     }
   }, [sessionId, authData, ws]);
+
+  // Debug WebSocket message function
+  const debugWebSocketMessage = (type: string, data: any) => {
+    addDebugLog(`📤 Sending ${type} message`);
+    addDebugLog(`📤 Data: ${JSON.stringify(data).substring(0, 200)}...`);
+    
+    // Validate the structure
+    if (type === 'passkey_auth_success' || type === 'passkey_created') {
+      if (!data.sessionId) {
+        addDebugLog('❌ Missing sessionId in message');
+      }
+      if (!data.authData) {
+        addDebugLog('❌ Missing authData in message');
+      } else {
+        addDebugLog(`✅ authData structure: credential=${!!data.authData.credential}, email=${!!data.authData.userEmail}, device=${!!data.authData.deviceInfo}`);
+      }
+    }
+  };
 
   // Enhanced WebSocket connection with heartbeat and detailed logging
   const connectWebSocket = React.useCallback(() => {
@@ -209,6 +272,10 @@ const MobileAuthWithLocation: React.FC = () => {
           switch (type) {
             case 'mobile_registered':
               addDebugLog('✅ Mobile registered successfully');
+              // Check location permission if required
+              if (requireLocation) {
+                checkLocationPermission();
+              }
               break;
               
             case 'connected':
@@ -225,7 +292,6 @@ const MobileAuthWithLocation: React.FC = () => {
               addDebugLog('✅ Authentication confirmed by server');
               if (requireLocation) {
                 addDebugLog('📍 Location required, waiting for location request...');
-                // Set a waiting state
                 setAuthState("processing");
               } else {
                 setAuthState("success");
@@ -262,8 +328,10 @@ const MobileAuthWithLocation: React.FC = () => {
             case 'location_check_complete':
               addDebugLog(`🎯 Location check complete: ${data?.success ? 'SUCCESS' : 'FAILED'}`);
               if (data?.success) {
+                addDebugLog(`✅ Access granted! Distance: ${data.distance}m`);
                 setAuthState("success");
               } else {
+                addDebugLog(`❌ Access denied: ${data?.error}`);
                 setErrorMessage(data?.error || 'Location check failed');
                 setAuthState("error");
               }
@@ -353,6 +421,11 @@ const MobileAuthWithLocation: React.FC = () => {
     addDebugLog(`🔧 Email: ${extractedUserEmail}`);
     addDebugLog(`🔧 Mode: ${extractedMode}`);
     addDebugLog(`🔧 Require Location: ${extractedRequireLocation}`);
+    
+    // Check location permission on load if required
+    if (extractedRequireLocation) {
+      checkLocationPermission();
+    }
   }, []);
 
   // Connect WebSocket when session ID is available
@@ -399,6 +472,17 @@ const MobileAuthWithLocation: React.FC = () => {
       setErrorMessage("WebAuthn/Passkey is not supported on this device");
       setAuthState("error");
       return;
+    }
+
+    // Check location permission first if required
+    if (requireLocation && locationPermissionStatus !== 'granted') {
+      addDebugLog('📍 Location required but not granted, requesting permission...');
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) {
+        setErrorMessage("Location access is required for authentication");
+        setAuthState("error");
+        return;
+      }
     }
 
     setAuthState("authenticating");
@@ -453,7 +537,9 @@ const MobileAuthWithLocation: React.FC = () => {
             }
           };
           
+          debugWebSocketMessage('passkey_auth_success', authMessage.data);
           addDebugLog('📤 Sending auth success to server');
+          
           ws.send(JSON.stringify(authMessage));
         } else {
           addDebugLog(`❌ WebSocket not ready for auth success: ${ws?.readyState}`);
@@ -493,6 +579,17 @@ const MobileAuthWithLocation: React.FC = () => {
       setErrorMessage("WebAuthn/Passkey is not supported on this device");
       setAuthState("error");
       return;
+    }
+
+    // Check location permission first if required
+    if (requireLocation && locationPermissionStatus !== 'granted') {
+      addDebugLog('📍 Location required but not granted, requesting permission...');
+      const hasPermission = await requestLocationPermission();
+      if (!hasPermission) {
+        setErrorMessage("Location access is required for passkey creation");
+        setAuthState("error");
+        return;
+      }
     }
 
     setAuthState("authenticating");
@@ -561,7 +658,9 @@ const MobileAuthWithLocation: React.FC = () => {
             }
           };
           
+          debugWebSocketMessage('passkey_created', creationMessage.data);
           addDebugLog('📤 Sending passkey creation success');
+          
           ws.send(JSON.stringify(creationMessage));
         } else {
           addDebugLog(`❌ WebSocket not ready for creation success: ${ws?.readyState}`);
@@ -642,6 +741,7 @@ const MobileAuthWithLocation: React.FC = () => {
             <div>WebSocket: {wsConnected ? '🟢 Connected' : '🔴 Disconnected'}</div>
             <div>Auth State: {authState}</div>
             <div>Require Location: {requireLocation ? 'Yes' : 'No'}</div>
+            <div>Location Permission: {locationPermissionStatus}</div>
             <div>Auth Data: {authData ? '✅ Set' : '❌ Not set'}</div>
             <div>Location Data: {locationData ? '✅ Set' : '❌ Not set'}</div>
           </div>
@@ -725,6 +825,27 @@ const MobileAuthWithLocation: React.FC = () => {
                   <p className="text-xs text-blue-700">
                     Your location will be captured when requested by the desktop application
                   </p>
+                  <div className="mt-2 flex items-center space-x-2">
+                    <div className={`w-2 h-2 rounded-full ${
+                      locationPermissionStatus === 'granted' ? 'bg-green-500' : 
+                      locationPermissionStatus === 'denied' ? 'bg-red-500' : 'bg-yellow-500'
+                    }`}></div>
+                    <span className="text-xs text-gray-600">
+                      Location: {locationPermissionStatus === 'granted' ? 'Allowed' : 
+                                locationPermissionStatus === 'denied' ? 'Denied' : 'Unknown'}
+                    </span>
+                  </div>
+                  {locationPermissionStatus !== 'granted' && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={requestLocationPermission}
+                      className="w-full mt-2"
+                    >
+                      <MapPin className="mr-1" />
+                      Grant Location Access
+                    </Button>
+                  )}
                 </div>
               )}
 
@@ -751,17 +872,27 @@ const MobileAuthWithLocation: React.FC = () => {
                       Test Connection
                     </Button>
                   </div>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => {
-                      addDebugLog('🧪 Manual location test triggered');
-                      captureAndSendLocation();
-                    }}
-                    className="w-full text-xs"
-                  >
-                    Test Location Capture
-                  </Button>
+                  <div className="flex space-x-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={checkLocationPermission}
+                      className="text-xs flex-1"
+                    >
+                      Check Location
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => {
+                        addDebugLog('🧪 Manual location test triggered');
+                        captureAndSendLocation();
+                      }}
+                      className="text-xs flex-1"
+                    >
+                      Test Capture
+                    </Button>
+                  </div>
                 </div>
               )}
             </div>
@@ -779,13 +910,20 @@ const MobileAuthWithLocation: React.FC = () => {
                 <p className="text-sm text-gray-600">
                   {getStateMessage()}
                 </p>
-                {locationData && authState === "processing" && (
+                {locationData && (authState === "processing" || authState === "location-capture") && (
                   <div className="mt-3 p-2 bg-green-50 rounded-lg">
                     <p className="text-xs text-green-700">
                       ✓ Location captured<br/>
                       Accuracy: {Math.round(locationData.accuracy)}m<br/>
                       Lat: {locationData.latitude.toFixed(6)}<br/>
                       Lng: {locationData.longitude.toFixed(6)}
+                    </p>
+                  </div>
+                )}
+                {authState === "processing" && requireLocation && !locationData && (
+                  <div className="mt-3 p-2 bg-blue-50 rounded-lg">
+                    <p className="text-xs text-blue-700">
+                      ⏳ Waiting for desktop to request location data...
                     </p>
                   </div>
                 )}
@@ -812,6 +950,7 @@ const MobileAuthWithLocation: React.FC = () => {
                     {requireLocation && locationData && (
                       <>
                         ✓ Location captured (±{Math.round(locationData.accuracy)}m)<br/>
+                        ✓ Geofence check passed<br/>
                       </>
                     )}
                     ✓ Data sent to {mode === 'registration' ? 'registration' : 'login'} page<br/>
@@ -845,6 +984,10 @@ const MobileAuthWithLocation: React.FC = () => {
                     setErrorMessage("");
                     setLocationData(null);
                     setAuthData(null);
+                    // Check location permission again
+                    if (requireLocation) {
+                      checkLocationPermission();
+                    }
                     // Reconnect WebSocket
                     if (sessionId) {
                       addDebugLog('🔗 Reconnecting WebSocket...');
@@ -890,6 +1033,23 @@ const MobileAuthWithLocation: React.FC = () => {
                 className="w-full mt-2"
               >
                 Reconnect
+              </Button>
+            </div>
+          )}
+
+          {requireLocation && locationPermissionStatus === 'denied' && authState === "ready" && (
+            <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+              <p className="text-sm text-red-800">
+                <strong>Location Required:</strong> Please enable location access in your browser settings to continue with authentication.
+              </p>
+              <Button 
+                variant="outline" 
+                size="sm"
+                onClick={requestLocationPermission}
+                className="w-full mt-2"
+              >
+                <MapPin className="mr-1" />
+                Request Location Access
               </Button>
             </div>
           )}
