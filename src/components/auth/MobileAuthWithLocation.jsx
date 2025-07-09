@@ -28,134 +28,6 @@ const MobileAuthWithLocation: React.FC = () => {
   const [authData, setAuthData] = useState<any>(null);
   const [requireLocation, setRequireLocation] = useState<boolean>(false);
 
-  // WebSocket connection
-  const connectWebSocket = React.useCallback(() => {
-    const wsUrl = 'wss://labmanagementdatabase.onrender.com';
-    
-    try {
-      const websocket = new WebSocket(wsUrl);
-      
-      websocket.onopen = () => {
-        console.log('Mobile WebSocket connected');
-        setWsConnected(true);
-        setWs(websocket);
-        
-        if (sessionId) {
-          websocket.send(JSON.stringify({
-            type: 'register_mobile',
-            data: {
-              sessionId,
-              userEmail,
-              challenge: Date.now().toString(),
-              mode,
-              requireLocation
-            }
-          }));
-        }
-      };
-      
-      // Updated Mobile Component - WebSocket message handler
-      websocket.onmessage = (event) => {
-        try {
-          const { type, data } = JSON.parse(event.data);
-          console.log('Mobile WebSocket message:', type, data);
-          
-          switch (type) {
-            case 'mobile_registered':
-              console.log('Mobile registered successfully');
-              break;
-              
-            case 'auth_success_confirmed':
-            case 'passkey_created_confirmed':
-            case 'passkey_verified_confirmed':
-              console.log('Authentication confirmed by server');
-              if (requireLocation) {
-                setAuthState("location-capture");
-                setTimeout(() => {
-                  captureAndSendLocation();
-                }, 500);
-              } else {
-                setAuthState("success");
-              }
-              break;
-              
-            case 'request_location':
-              console.log('Desktop requesting location data - capturing now...');
-              // Immediately capture and send location when requested
-              captureAndSendLocation();
-              break;
-              
-            case 'error':
-              console.error('WebSocket error:', data?.message || 'Unknown error');
-              setErrorMessage(data?.message || 'Authentication error');
-              setAuthState("error");
-              break;
-              
-            default:
-              console.log('Unknown WebSocket message type:', type);
-              break;
-          }
-        } catch (error) {
-          console.error('Error parsing WebSocket message:', error);
-        }
-      };
-      
-      websocket.onclose = () => {
-        console.log('Mobile WebSocket disconnected');
-        setWsConnected(false);
-        setWs(null);
-      };
-      
-      websocket.onerror = (error) => {
-        console.error('Mobile WebSocket error:', error);
-        setWsConnected(false);
-      };
-    } catch (error) {
-      console.error('Failed to create WebSocket:', error);
-      setWsConnected(false);
-    }
-  }, [sessionId, userEmail, mode, requireLocation]);
-
-  // Extract URL parameters and connect WebSocket
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const extractedSessionId = urlParams.get('sessionId') || '';
-    const extractedUserEmail = urlParams.get('userEmail') || '';
-    const extractedLabName = urlParams.get('labName') || urlParams.get('labId') || '';
-    const extractedMode = urlParams.get('mode') || 'login';
-    const extractedRequireLocation = urlParams.get('requireLocation') === 'true';
-    
-    setSessionId(extractedSessionId);
-    setUserEmail(extractedUserEmail);
-    setLabName(extractedLabName);
-    setMode(extractedMode);
-    setRequireLocation(extractedRequireLocation);
-    
-    console.log('Extracted params:', { 
-      extractedSessionId, 
-      extractedUserEmail, 
-      extractedLabName, 
-      extractedMode, 
-      extractedRequireLocation 
-    });
-  }, []);
-
-  // Connect WebSocket when session ID is available
-  useEffect(() => {
-    if (sessionId) {
-      const timer = setTimeout(() => {
-        connectWebSocket();
-      }, 500);
-      
-      return () => {
-        clearTimeout(timer);
-        if (ws) {
-          ws.close();
-        }
-      };
-    }
-  }, [sessionId, connectWebSocket]);
-
   // Check if WebAuthn is supported
   const isWebAuthnSupported = (): boolean => {
     return typeof window !== 'undefined' && window.PublicKeyCredential !== undefined;
@@ -168,6 +40,8 @@ const MobileAuthWithLocation: React.FC = () => {
         reject(new Error('Geolocation is not supported on this device'));
         return;
       }
+
+      console.log('📍 Requesting geolocation...');
 
       navigator.geolocation.getCurrentPosition(
         (position) => {
@@ -182,10 +56,12 @@ const MobileAuthWithLocation: React.FC = () => {
             timestamp: Date.now()
           };
           
+          console.log('📍 Geolocation success:', location);
           setLocationData(location);
           resolve(location);
         },
         (error) => {
+          console.error('📍 Geolocation error:', error);
           let errorMsg = 'Unable to get location';
           switch (error.code) {
             case error.PERMISSION_DENIED:
@@ -209,14 +85,18 @@ const MobileAuthWithLocation: React.FC = () => {
     });
   };
 
-  // Updated captureAndSendLocation function
-  const captureAndSendLocation = async () => {
+  // Updated captureAndSendLocation function with better error handling
+  const captureAndSendLocation = React.useCallback(async () => {
     try {
+      console.log('📍 Starting location capture process...');
       setAuthState("location-capture");
-      console.log('Starting location capture...');
       
       const location = await captureLocation();
-      console.log('Location captured successfully:', location);
+      console.log('📍 Location captured successfully:', {
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy
+      });
       
       setAuthState("processing");
       
@@ -237,23 +117,223 @@ const MobileAuthWithLocation: React.FC = () => {
           }
         };
         
-        console.log('Sending location to desktop:', locationMessage);
+        console.log('📤 Sending location to desktop:', locationMessage);
         ws.send(JSON.stringify(locationMessage));
         
         // Show success after a brief delay
         setTimeout(() => {
+          console.log('✅ Location sent successfully, showing success state');
           setAuthState("success");
         }, 1000);
       } else {
+        console.error('❌ WebSocket not connected when trying to send location');
+        console.log('WebSocket state:', ws?.readyState);
         throw new Error('WebSocket not connected');
       }
       
     } catch (error) {
-      console.error('Location capture error:', error);
+      console.error('❌ Location capture error:', error);
       setErrorMessage(error.message || 'Failed to capture location');
       setAuthState("error");
     }
+  }, [sessionId, authData, ws]);
+
+  // WebSocket connection with enhanced debugging
+  const connectWebSocket = React.useCallback(() => {
+    const wsUrl = 'wss://labmanagementdatabase.onrender.com';
+    
+    console.log('🔗 Attempting WebSocket connection to:', wsUrl);
+    console.log('🔗 Session data:', { sessionId, userEmail, mode, requireLocation });
+    
+    try {
+      const websocket = new WebSocket(wsUrl);
+      
+      websocket.onopen = () => {
+        console.log('✅ Mobile WebSocket connected successfully');
+        setWsConnected(true);
+        setWs(websocket);
+        
+        if (sessionId) {
+          const registrationMessage = {
+            type: 'register_mobile',
+            data: {
+              sessionId,
+              userEmail,
+              challenge: Date.now().toString(),
+              mode,
+              requireLocation
+            }
+          };
+          
+          console.log('📤 Sending mobile registration:', registrationMessage);
+          websocket.send(JSON.stringify(registrationMessage));
+        } else {
+          console.error('❌ No sessionId available for registration');
+        }
+      };
+      
+      websocket.onmessage = (event) => {
+        try {
+          const messageData = JSON.parse(event.data);
+          console.log('🔵 Mobile WebSocket message received:', messageData);
+          
+          const { type, data } = messageData;
+          
+          switch (type) {
+            case 'mobile_registered':
+              console.log('✅ Mobile registered successfully');
+              break;
+              
+            case 'auth_success_confirmed':
+            case 'passkey_created_confirmed':
+            case 'passkey_verified_confirmed':
+              console.log('✅ Authentication confirmed by server');
+              if (requireLocation) {
+                setAuthState("location-capture");
+                setTimeout(() => {
+                  captureAndSendLocation();
+                }, 500);
+              } else {
+                setAuthState("success");
+              }
+              break;
+              
+            case 'request_location':
+              console.log('📍 Desktop requesting location data - capturing now...');
+              console.log('📍 Request data:', data);
+              
+              // Immediately capture and send location when requested
+              if (websocket && websocket.readyState === WebSocket.OPEN) {
+                console.log('📍 WebSocket is open, capturing location...');
+                captureAndSendLocation();
+              } else {
+                console.error('❌ WebSocket not ready for location capture');
+                console.log('WebSocket state:', websocket?.readyState);
+                setErrorMessage('Connection lost during location request');
+                setAuthState("error");
+              }
+              break;
+              
+            case 'connected':
+              console.log('🔗 WebSocket connected with ID:', data?.connectionId);
+              break;
+              
+            case 'pong':
+              console.log('🏓 Pong received from server');
+              break;
+              
+            case 'error':
+              console.error('❌ WebSocket error from server:', data?.message || 'Unknown error');
+              setErrorMessage(data?.message || 'Authentication error');
+              setAuthState("error");
+              break;
+              
+            default:
+              console.log('❓ Unknown WebSocket message type:', type, 'Data:', data);
+              break;
+          }
+        } catch (error) {
+          console.error('❌ Error parsing WebSocket message:', error);
+          console.error('❌ Raw message:', event.data);
+        }
+      };
+      
+      websocket.onclose = (event) => {
+        console.log('🔌 Mobile WebSocket disconnected:', event.code, event.reason);
+        setWsConnected(false);
+        setWs(null);
+        
+        // Don't auto-reconnect to avoid loops, let user retry
+        if (authState !== "success" && authState !== "error") {
+          setErrorMessage('Connection lost. Please try again.');
+          setAuthState("error");
+        }
+      };
+      
+      websocket.onerror = (error) => {
+        console.error('❌ Mobile WebSocket error:', error);
+        setWsConnected(false);
+        setErrorMessage('Connection failed. Please check your internet.');
+        setAuthState("error");
+      };
+    } catch (error) {
+      console.error('❌ Failed to create WebSocket:', error);
+      setWsConnected(false);
+      setErrorMessage('Failed to establish connection');
+      setAuthState("error");
+    }
+  }, [sessionId, userEmail, mode, requireLocation, authState, captureAndSendLocation]);
+
+  // Extract URL parameters and connect WebSocket
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const extractedSessionId = urlParams.get('sessionId') || '';
+    const extractedUserEmail = urlParams.get('userEmail') || '';
+    const extractedLabName = urlParams.get('labName') || urlParams.get('labId') || '';
+    const extractedMode = urlParams.get('mode') || 'login';
+    const extractedRequireLocation = urlParams.get('requireLocation') === 'true';
+    
+    setSessionId(extractedSessionId);
+    setUserEmail(extractedUserEmail);
+    setLabName(extractedLabName);
+    setMode(extractedMode);
+    setRequireLocation(extractedRequireLocation);
+    
+    console.log('🔧 Extracted URL params:', { 
+      extractedSessionId, 
+      extractedUserEmail, 
+      extractedLabName, 
+      extractedMode, 
+      extractedRequireLocation 
+    });
+  }, []);
+
+  // Connect WebSocket when session ID is available
+  useEffect(() => {
+    if (sessionId) {
+      console.log('🔗 Session ID available, connecting WebSocket in 500ms...');
+      const timer = setTimeout(() => {
+        connectWebSocket();
+      }, 500);
+      
+      return () => {
+        clearTimeout(timer);
+        if (ws) {
+          console.log('🔌 Cleaning up WebSocket connection');
+          ws.close();
+        }
+      };
+    }
+  }, [sessionId, connectWebSocket]);
+
+  // Test WebSocket connection
+  const testWebSocketConnection = () => {
+    if (ws) {
+      console.log('🔗 WebSocket state check:', {
+        readyState: ws.readyState,
+        url: ws.url,
+        protocol: ws.protocol
+      });
+      
+      // Send a ping to test connection
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+          type: 'ping',
+          data: { timestamp: Date.now() }
+        }));
+        console.log('📡 Ping sent to test connection');
+      }
+    } else {
+      console.log('❌ WebSocket is null');
+    }
   };
+
+  // Test connection when WebSocket is established
+  useEffect(() => {
+    if (ws && sessionId) {
+      setTimeout(testWebSocketConnection, 1000);
+    }
+  }, [ws, sessionId]);
 
   // Trigger WebAuthn passkey authentication
   const authenticateWithPasskey = async (): Promise<void> => {
@@ -264,6 +344,7 @@ const MobileAuthWithLocation: React.FC = () => {
     }
 
     setAuthState("authenticating");
+    console.log('🔐 Starting passkey authentication...');
 
     try {
       // Generate authentication challenge
@@ -281,11 +362,13 @@ const MobileAuthWithLocation: React.FC = () => {
         }
       };
 
+      console.log('🔐 Requesting WebAuthn credential...');
+      
       // Request authentication
       const credential = await navigator.credentials.get(publicKeyCredentialRequestOptions);
 
       if (credential) {
-        console.log("Passkey authentication successful", credential);
+        console.log("✅ Passkey authentication successful", credential);
         
         const authInfo = {
           success: true,
@@ -303,7 +386,7 @@ const MobileAuthWithLocation: React.FC = () => {
         
         // Send authentication success via WebSocket
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
+          const authMessage = {
             type: 'passkey_auth_success',
             data: { 
               sessionId,
@@ -312,17 +395,27 @@ const MobileAuthWithLocation: React.FC = () => {
             message: "Passkey authentication successful. Checking location...",
             authData: authInfo,
             nextStep: "location_check"
-          }));
+          };
+          
+          console.log('📤 Sending auth success:', authMessage);
+          ws.send(JSON.stringify(authMessage));
+        } else {
+          console.error('❌ WebSocket not connected when sending auth success');
+          setErrorMessage('Connection lost during authentication');
+          setAuthState("error");
+          return;
         }
         
         // If location is required, wait for desktop to request it
         // Don't automatically capture location here - wait for request_location message
         if (!requireLocation) {
           setAuthState("success");
+        } else {
+          console.log('📍 Location required, waiting for desktop request...');
         }
       }
     } catch (error: any) {
-      console.error("Authentication failed:", error);
+      console.error("❌ Authentication failed:", error);
       
       let errorMsg = "Authentication failed";
       if (error.name === "NotAllowedError") {
@@ -347,6 +440,7 @@ const MobileAuthWithLocation: React.FC = () => {
     }
 
     setAuthState("authenticating");
+    console.log('🆕 Starting passkey creation...');
 
     try {
       const challenge = new Uint8Array(32);
@@ -380,10 +474,11 @@ const MobileAuthWithLocation: React.FC = () => {
         }
       };
 
+      console.log('🆕 Creating WebAuthn credential...');
       const credential = await navigator.credentials.create(publicKeyCredentialCreationOptions);
 
       if (credential) {
-        console.log("Passkey created successfully", credential);
+        console.log("✅ Passkey created successfully", credential);
         
         const authInfo = {
           success: true,
@@ -401,7 +496,7 @@ const MobileAuthWithLocation: React.FC = () => {
         
         // Send passkey creation success via WebSocket
         if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({
+          const creationMessage = {
             type: 'passkey_created',
             data: { 
               sessionId,
@@ -410,16 +505,26 @@ const MobileAuthWithLocation: React.FC = () => {
             message: "Passkey created successfully. Checking location...",
             authData: authInfo,
             nextStep: "location_check"
-          }));
+          };
+          
+          console.log('📤 Sending passkey creation success:', creationMessage);
+          ws.send(JSON.stringify(creationMessage));
+        } else {
+          console.error('❌ WebSocket not connected when sending creation success');
+          setErrorMessage('Connection lost during passkey creation');
+          setAuthState("error");
+          return;
         }
         
         // If location is required, wait for desktop to request it
         if (!requireLocation) {
           setAuthState("success");
+        } else {
+          console.log('📍 Location required, waiting for desktop request...');
         }
       }
     } catch (error: any) {
-      console.error("Passkey creation failed:", error);
+      console.error("❌ Passkey creation failed:", error);
       
       let errorMsg = "Failed to create passkey";
       if (error.name === "NotAllowedError") {
@@ -544,6 +649,14 @@ const MobileAuthWithLocation: React.FC = () => {
                   <p className="text-xs text-gray-600">
                     <strong>Session:</strong> {sessionId.substring(0, 20)}...
                   </p>
+                  <Button 
+                    variant="outline" 
+                    size="sm"
+                    onClick={testWebSocketConnection}
+                    className="mt-2 text-xs"
+                  >
+                    Test Connection
+                  </Button>
                 </div>
               )}
             </div>
@@ -625,6 +738,10 @@ const MobileAuthWithLocation: React.FC = () => {
                   setErrorMessage("");
                   setLocationData(null);
                   setAuthData(null);
+                  // Reconnect WebSocket
+                  if (sessionId) {
+                    setTimeout(connectWebSocket, 1000);
+                  }
                 }}
               >
                 Try Again
