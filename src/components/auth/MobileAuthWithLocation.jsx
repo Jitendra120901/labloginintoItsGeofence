@@ -135,10 +135,8 @@ const MobileAuthWithLocation: React.FC = () => {
       
       ws.send(JSON.stringify(locationMessage));
       
-      setTimeout(() => {
-        addDebugLog('✅ Location sent successfully, showing success state');
-        setAuthState("success");
-      }, 1000);
+      // Wait for server response instead of auto-success
+      addDebugLog('✅ Location sent successfully, waiting for server response...');
       
     } catch (error) {
       addDebugLog(`❌ Location capture error: ${error.message}`);
@@ -202,7 +200,7 @@ const MobileAuthWithLocation: React.FC = () => {
           addDebugLog(`🔵 WebSocket message received: ${messageData.type}`);
           
           // Log the full message for critical types
-          if (['request_location', 'error'].includes(messageData.type)) {
+          if (['request_location', 'error', 'location_check_complete'].includes(messageData.type)) {
             console.log('Full WebSocket message:', messageData);
           }
           
@@ -227,7 +225,8 @@ const MobileAuthWithLocation: React.FC = () => {
               addDebugLog('✅ Authentication confirmed by server');
               if (requireLocation) {
                 addDebugLog('📍 Location required, waiting for location request...');
-                // Don't auto-capture, wait for request_location
+                // Set a waiting state
+                setAuthState("processing");
               } else {
                 setAuthState("success");
               }
@@ -258,6 +257,27 @@ const MobileAuthWithLocation: React.FC = () => {
                 setErrorMessage('Session mismatch error');
                 setAuthState("error");
               }
+              break;
+
+            case 'location_check_complete':
+              addDebugLog(`🎯 Location check complete: ${data?.success ? 'SUCCESS' : 'FAILED'}`);
+              if (data?.success) {
+                setAuthState("success");
+              } else {
+                setErrorMessage(data?.error || 'Location check failed');
+                setAuthState("error");
+              }
+              break;
+
+            case 'access_granted':
+              addDebugLog('✅ Access granted by server');
+              setAuthState("success");
+              break;
+
+            case 'access_denied':
+              addDebugLog('❌ Access denied by server');
+              setErrorMessage(data?.message || 'Access denied');
+              setAuthState("error");
               break;
               
             case 'error':
@@ -430,10 +450,7 @@ const MobileAuthWithLocation: React.FC = () => {
             data: { 
               sessionId,
               authData: authInfo
-            },
-            message: "Passkey authentication successful. Checking location...",
-            authData: authInfo,
-            nextStep: "location_check"
+            }
           };
           
           addDebugLog('📤 Sending auth success to server');
@@ -450,6 +467,7 @@ const MobileAuthWithLocation: React.FC = () => {
           setAuthState("success");
         } else {
           addDebugLog('📍 Location required, waiting for desktop request...');
+          setAuthState("processing");
         }
       }
     } catch (error: any) {
@@ -540,10 +558,7 @@ const MobileAuthWithLocation: React.FC = () => {
             data: { 
               sessionId,
               authData: authInfo
-            },
-            message: "Passkey created successfully. Checking location...",
-            authData: authInfo,
-            nextStep: "location_check"
+            }
           };
           
           addDebugLog('📤 Sending passkey creation success');
@@ -560,6 +575,7 @@ const MobileAuthWithLocation: React.FC = () => {
           setAuthState("success");
         } else {
           addDebugLog('📍 Location required, waiting for desktop request...');
+          setAuthState("processing");
         }
       }
     } catch (error: any) {
@@ -593,7 +609,7 @@ const MobileAuthWithLocation: React.FC = () => {
       case "ready": return "Ready for authentication";
       case "authenticating": return "Complete biometric authentication";
       case "location-capture": return "Capturing your location...";
-      case "processing": return "Processing authentication and location...";
+      case "processing": return requireLocation ? "Waiting for location request..." : "Processing authentication...";
       case "success": return "Authentication and location capture complete!";
       case "error": return errorMessage || "Authentication failed";
     }
