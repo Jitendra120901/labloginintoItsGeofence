@@ -262,8 +262,11 @@ const MobileAuthWithLocation: React.FC = () => {
           const messageData = JSON.parse(event.data);
           addDebugLog(`🔵 WebSocket message received: ${messageData.type}`);
           
+          // Enhanced logging for all message types
+          addDebugLog(`🔵 Full message: ${JSON.stringify(messageData, null, 2)}`);
+          
           // Log the full message for critical types
-          if (['request_location', 'error', 'location_check_complete'].includes(messageData.type)) {
+          if (['request_location', 'error', 'location_check_complete', 'passkey_verified_confirmed'].includes(messageData.type)) {
             console.log('Full WebSocket message:', messageData);
           }
           
@@ -290,10 +293,14 @@ const MobileAuthWithLocation: React.FC = () => {
             case 'passkey_created_confirmed':
             case 'passkey_verified_confirmed':
               addDebugLog('✅ Authentication confirmed by server');
+              addDebugLog(`✅ Server response: ${data?.message}`);
+              addDebugLog(`✅ Require location: ${data?.requireLocation}`);
+              
               if (requireLocation) {
                 addDebugLog('📍 Location required, waiting for location request...');
                 setAuthState("processing");
               } else {
+                addDebugLog('✅ No location required, setting success state');
                 setAuthState("success");
               }
               break;
@@ -304,6 +311,7 @@ const MobileAuthWithLocation: React.FC = () => {
               addDebugLog(`📍 Current sessionId: ${sessionId}`);
               addDebugLog(`📍 WebSocket ready state: ${websocket.readyState}`);
               addDebugLog(`📍 Auth data present: ${!!authData}`);
+              addDebugLog(`📍 Request ID: ${data?.requestId}`);
               
               // Verify this is for our session
               if (data?.sessionId === sessionId) {
@@ -327,6 +335,9 @@ const MobileAuthWithLocation: React.FC = () => {
 
             case 'location_check_complete':
               addDebugLog(`🎯 Location check complete: ${data?.success ? 'SUCCESS' : 'FAILED'}`);
+              addDebugLog(`🎯 Distance: ${data?.distance}m`);
+              addDebugLog(`🎯 Message: ${data?.message}`);
+              
               if (data?.success) {
                 addDebugLog(`✅ Access granted! Distance: ${data.distance}m`);
                 setAuthState("success");
@@ -339,17 +350,20 @@ const MobileAuthWithLocation: React.FC = () => {
 
             case 'access_granted':
               addDebugLog('✅ Access granted by server');
+              addDebugLog(`✅ Message: ${data?.message}`);
               setAuthState("success");
               break;
 
             case 'access_denied':
               addDebugLog('❌ Access denied by server');
+              addDebugLog(`❌ Message: ${data?.message}`);
               setErrorMessage(data?.message || 'Access denied');
               setAuthState("error");
               break;
               
             case 'error':
               addDebugLog(`❌ Server error: ${data?.message || 'Unknown error'}`);
+              addDebugLog(`❌ Error details: ${JSON.stringify(data, null, 2)}`);
               setErrorMessage(data?.message || 'Authentication error');
               setAuthState("error");
               break;
@@ -363,6 +377,7 @@ const MobileAuthWithLocation: React.FC = () => {
           }
         } catch (error) {
           addDebugLog(`❌ Error parsing message: ${error.message}`);
+          addDebugLog(`❌ Raw message: ${event.data}`);
           console.error('❌ Error parsing WebSocket message:', error);
           console.error('❌ Raw message:', event.data);
         }
@@ -559,7 +574,7 @@ const MobileAuthWithLocation: React.FC = () => {
     } catch (error: any) {
       addDebugLog(`❌ Authentication failed: ${error.name} - ${error.message}`);
       
-      let errorMsg = error.name + ": error msg :  "+error.message;
+      let errorMsg = "Authentication failed";
       if (error.name === "NotAllowedError") {
         errorMsg = "Authentication was cancelled or timed out";
       } else if (error.name === "InvalidStateError") {
@@ -658,10 +673,18 @@ const MobileAuthWithLocation: React.FC = () => {
             }
           };
           
+          // Enhanced debugging
+          addDebugLog('📤 SENDING CREATION MESSAGE TO SERVER:');
+          addDebugLog(`📤 Full message: ${JSON.stringify(creationMessage, null, 2)}`);
+          addDebugLog(`📤 Session ID: ${sessionId}`);
+          addDebugLog(`📤 Auth data present: ${!!authInfo}`);
+          addDebugLog(`📤 Credential: ${authInfo.credential}`);
+          addDebugLog(`📤 User email: ${authInfo.userEmail}`);
+          
           debugWebSocketMessage('passkey_created', creationMessage.data);
-          addDebugLog('📤 Sending passkey creation success');
           
           ws.send(JSON.stringify(creationMessage));
+          addDebugLog('✅ Creation message sent successfully');
         } else {
           addDebugLog(`❌ WebSocket not ready for creation success: ${ws?.readyState}`);
           setErrorMessage('Connection lost during passkey creation');
@@ -680,7 +703,7 @@ const MobileAuthWithLocation: React.FC = () => {
     } catch (error: any) {
       addDebugLog(`❌ Passkey creation failed: ${error.name} - ${error.message}`);
       
-      let errorMsg = "Failed to create passkey";
+      let errorMsg = `${error.name}: ${error.message}`;
       if (error.name === "NotAllowedError") {
         errorMsg = "Passkey creation was cancelled";
       } else if (error.name === "InvalidStateError") {
