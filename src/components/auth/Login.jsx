@@ -171,7 +171,7 @@ const Login = ({ onLogin }) => {
             // We don't need to do anything here, just wait
             break;
             
-          case 'request_location_from_mobile':
+          case 'request_location':
             addDebugLog('📍 Server instructing desktop to request location');
             setLocationStatus('Requesting location from mobile device...');
             
