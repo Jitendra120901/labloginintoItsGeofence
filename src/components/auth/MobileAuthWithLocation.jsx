@@ -330,6 +330,7 @@ const MobileAuthWithLocation: React.FC = () => {
               //   setErrorMessage('Session mismatch error');
               //   setAuthState("error");
               // }
+              alert('Location request received! Please capture your location.');
               captureAndSendLocation();
               break;
 
