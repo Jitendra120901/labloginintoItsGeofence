@@ -271,7 +271,7 @@ const MobileAuthWithLocation: React.FC = () => {
           }
           
           const { type, data } = messageData;
-          
+          alert(' getting alet type=======>',type);
           switch (type) {
             case 'mobile_registered':
               addDebugLog('✅ Mobile registered successfully');
@@ -330,7 +330,7 @@ const MobileAuthWithLocation: React.FC = () => {
               //   setErrorMessage('Session mismatch error');
               //   setAuthState("error");
               // }
-              alert('Location request received! Please capture your location.');
+             
               captureAndSendLocation();
               break;
 
